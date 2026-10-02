@@ -1,6 +1,6 @@
 import { Fragment } from 'react';
 import { Undo2 } from 'lucide-react';
-import { useTerritory } from './api';
+import { useTerritory, useVillageDistrict } from './api';
 import { useI18n } from './i18n';
 import { selectTerritory } from './state';
 
@@ -9,8 +9,8 @@ type Ref = { type: string; code: number };
 // Province code's first digit → region code (BPS numbering; verified against /ranking/country/1/region).
 const REGION_OF: Record<string, number> = { 1: 1, 2: 1, 3: 2, 5: 4, 6: 3, 7: 5, 8: 6, 9: 7 };
 
-/** Admin ancestors derived from nested BPS codes. Villages / thematic areas fall back to parentLabel. */
-export function ancestors({ type, code }: Ref): Ref[] {
+/** Admin ancestors derived from nested BPS codes (villages via their district). Thematic areas fall back to parentLabel. */
+export function ancestors({ type, code }: Ref, district?: number | null): Ref[] {
   const s = String(code);
   const province = (p: string): Ref[] => [{ type: 'region', code: REGION_OF[p[0]] }, { type: 'province', code: +p }];
   switch (type) {
@@ -20,6 +20,8 @@ export function ancestors({ type, code }: Ref): Ref[] {
       return province(s.slice(0, 2));
     case 'district':
       return [...province(s.slice(0, 2)), { type: 'regency', code: +s.slice(0, 4) }];
+    case 'village': // codes aren't nested; caller passes the district (see useVillageDistrict)
+      return district ? [...ancestors({ type: 'district', code: district }), { type: 'district', code: district }] : [];
     default:
       return [];
   }
@@ -37,10 +39,12 @@ function Crumb({ r }: { r: Ref }) {
 export function Breadcrumb({ type, code, name, parentLabel }: Ref & { name: string; parentLabel?: string | null }) {
   const { t } = useI18n();
   const isRoot = type === 'country';
-  const chain: Ref[] = isRoot ? [] : [{ type: 'country', code: 1 }, ...ancestors({ type, code })];
+  const district = useVillageDistrict(code, type === 'village').data;
+  const up = ancestors({ type, code }, district);
+  const chain: Ref[] = isRoot ? [] : [{ type: 'country', code: 1 }, ...up];
   const parent = chain.at(-1);
   // parentLabel adds the one level we can't derive from codes (village → district, thematic areas)
-  const extra = !isRoot && ancestors({ type, code }).length === 0 && parentLabel && parentLabel !== 'Indonesia' ? parentLabel : null;
+  const extra = !isRoot && up.length === 0 && parentLabel && parentLabel !== 'Indonesia' ? parentLabel : null;
 
   return (
     <nav className="crumbs" aria-label="breadcrumb">

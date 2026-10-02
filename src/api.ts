@@ -1,5 +1,7 @@
 import { useMemo } from 'react';
 import { QueryClient, useQueries, useQuery, useQueryClient, keepPreviousData } from '@tanstack/react-query';
+import { VectorTile } from '@mapbox/vector-tile';
+import { PbfReader } from 'pbf';
 import { codesInside } from './inside';
 import { ADMIN_TYPES } from './state';
 
@@ -168,7 +170,14 @@ export const useTimeSeries = (s: Sel, p: Partial<Period>, codes?: number[]) => {
 };
 const rankingRaw = (s: Sel, p: Partial<Period>) => get<RankRow[]>(`/statistics/ranking/${path(s)}/raw`, p);
 export const useRanking = (s: Sel, p: Partial<Period>) =>
-  useQuery({ queryKey: ['rank', s, p], queryFn: () => rankingRaw(s, p), enabled: ready(p), ...STATS });
+  useQuery({
+    queryKey: ['rank', s, p],
+    queryFn: () => rankingRaw(s, p),
+    enabled: ready(p),
+    // grouped by its own type (e.g. a village) the API ignores the territory and returns every one nationwide (83k villages)
+    select: s.grouping === s.type ? (rows: RankRow[]) => rows.filter((r) => r.code === s.code) : undefined,
+    ...STATS,
+  });
 
 type MapQ = Partial<Period> & { territoryType: string; territoryCode: number };
 export const useFireTiles = (kind: 'raster' | 'heatmap', q: MapQ) =>
@@ -252,3 +261,34 @@ export function useRankingFor(s: Sel, p: Partial<Period>, derived: boolean) {
 }
 export const useInsideCodes = (type: string, code: number, grouping: string, enabled: boolean) => useInside(type, code, grouping, enabled).data?.whole;
 
+
+/** A village's district code. Village codes aren't nested BPS codes, but its grouping-tile feature carries districtCode. */
+export const useVillageDistrict = (code: number, enabled: boolean) => {
+  const box = useBounds('village', code).data?.geometry.coordinates[0];
+  return useQuery({
+    queryKey: ['villageDistrict', code],
+    enabled: enabled && !!box,
+    ...STATIC,
+    queryFn: async () => {
+      // z10 tiles touching the village's bbox corners (usually 1, at most 4)
+      const z = 10;
+      const n = 2 ** z;
+      const tx = (lon: number) => Math.floor(((lon + 180) / 360) * n);
+      const ty = (lat: number) => {
+        const r = (lat * Math.PI) / 180;
+        return Math.floor(((1 - Math.log(Math.tan(r) + 1 / Math.cos(r)) / Math.PI) / 2) * n);
+      };
+      const tiles = new Set(box!.map(([lon, lat]) => `${tx(lon)}/${ty(lat)}`));
+      for (const t of tiles) {
+        const r = await fetch(groupingTilesUrl('village').replace('{z}/{x}/{y}', `${z}/${t}`));
+        if (!r.ok) continue;
+        const layer = new VectorTile(new PbfReader(new Uint8Array(await r.arrayBuffer()))).layers.default;
+        for (let i = 0; i < (layer?.length ?? 0); i++) {
+          const f = layer.feature(i).properties;
+          if (Number(f.code) === code && f.districtCode != null) return Number(f.districtCode);
+        }
+      }
+      return null;
+    },
+  });
+};
