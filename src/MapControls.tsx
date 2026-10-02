@@ -143,7 +143,6 @@ export function MapControls({ map, s, bbox, drawing }: Props) {
   const iEnd = Math.max(0, months.indexOf(s.monthEnd ?? -1));
   const pct = (i: number) => (months.length > 1 ? (i / (months.length - 1)) * 100 : 0);
 
-  const [yearDraft, setYearDraft] = useState(s.year);
   const [coordText, setCoordText] = useState('');
   const flyTo = (lat: number, lng: number) =>
     Number.isFinite(lat) && Number.isFinite(lng) && Math.abs(lat) <= 90 && Math.abs(lng) <= 180 && map.flyTo({ center: [lng, lat], zoom: Math.max(map.getZoom(), 9) });
@@ -288,34 +287,26 @@ export function MapControls({ map, s, bbox, drawing }: Props) {
       {/* ---------- bottom ---------- */}
       <div className="map-bottom">
         <div className="time-bar" ref={yearRef}>
-          <button className="year-btn" aria-expanded={pop === 'year'} onClick={() => (setYearDraft(s.year), toggle('year'))}>
+          <button className="year-btn" aria-expanded={pop === 'year'} onClick={() => toggle('year')}>
             {s.year ?? '—'} <ChevronDown size={16} />
           </button>
           {pop === 'year' && (
-            <div className="pop year-pop">
-              <div className="pop-title" style={{ padding: '12px 10px', fontWeight: 400 }}>
-                {t.selectYear}
-              </div>
-              <div className="pop-body">
-                <select aria-label={t.selectYear} value={yearDraft} onChange={(e) => setYearDraft(+e.target.value)}>
-                  {years.map((y) => (
-                    <option key={y}>{y}</option>
-                  ))}
-                </select>
-              </div>
-              <div className="pop-actions">
-                <button className="btn text" onClick={close}>
-                  {t.cancel}
-                </button>
-                <button
-                  className="btn primary"
-                  onClick={() => {
-                    if (yearDraft !== s.year) setState({ year: yearDraft, monthStart: undefined, monthEnd: undefined });
-                    close();
-                  }}
-                >
-                  {t.apply}
-                </button>
+            <div className="pop year-pop" role="menu" aria-label={t.selectYear}>
+              <div className="pop-title">{t.selectYear}</div>
+              <div className="year-grid">
+                {years.map((y) => (
+                  <button
+                    key={y}
+                    role="menuitemradio"
+                    aria-checked={y === s.year}
+                    onClick={() => {
+                      if (y !== s.year) setState({ year: y, monthStart: undefined, monthEnd: undefined });
+                      close();
+                    }}
+                  >
+                    {y}
+                  </button>
+                ))}
               </div>
             </div>
           )}

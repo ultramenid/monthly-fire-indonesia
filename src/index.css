@@ -503,24 +503,35 @@ a {
 .year-pop {
   bottom: 48px;
   left: 0;
-  width: 140px;
+  width: 220px;
 }
-.year-pop .pop-body {
-  padding: 16px 10px;
+.year-pop .pop-title {
+  padding: 10px 12px 8px;
+}
+.year-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 6px;
+  padding: 10px;
+  max-height: 240px;
+  overflow-y: auto;
   border-top: 1px solid var(--border);
 }
-.year-pop select {
-  width: 72px;
-  height: 32px;
-  border: 1px solid var(--primary);
-  border-radius: 4px;
-  background: var(--bg);
-  padding: 0 6px;
+.year-grid button {
+  height: 34px;
+  border-radius: 8px;
+  color: var(--text-2);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
 }
-.year-pop .pop-actions {
-  display: flex;
-  justify-content: space-between;
-  padding: 0 10px 10px;
+.year-grid button:hover {
+  background: var(--surface-2);
+  color: var(--text);
+}
+.year-grid button[aria-checked='true'] {
+  background: color-mix(in srgb, var(--primary) 16%, transparent);
+  color: var(--accent-text);
+  box-shadow: inset 0 0 0 1px var(--primary);
 }
 .btn {
   height: 32px;
