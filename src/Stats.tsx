@@ -307,7 +307,7 @@ function GroupingSelect({ s, opts }: P & { opts: ReturnType<typeof useGroupingOp
   if (s.grouping !== def && !listed.includes(s.grouping)) listed.push(s.grouping); // keep the current choice visible
   const thematic = listed.sort((a, b) => Object.keys(opts.names).indexOf(a) - Object.keys(opts.names).indexOf(b));
   return (
-    <label className={`group-select${s.grouping !== def ? ' active' : ''}`}>
+    <label className="group-select">
       {t.groupedBy}
       <select value={s.grouping} disabled={!thematic.length && s.grouping === def} onChange={(e) => setState({ grouping: e.target.value })}>
         <option value={def}>

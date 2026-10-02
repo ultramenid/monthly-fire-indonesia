@@ -99,7 +99,7 @@ const id: Dict = {
   rankDesc: 'Peringkat wilayah yang paling terdampak kebakaran, menurut pengelompokan wilayah dan periode yang dipilih.',
   removePaint: 'Hapus warna',
   paintMap: 'Warnai peta',
-  groupedBy: 'Dikelompokkan per',
+  groupedBy: 'Grup',
     adminGroup: 'Administratif',
   showing: 'Menampilkan',
   allLandCover: 'semua tutupan lahan',
