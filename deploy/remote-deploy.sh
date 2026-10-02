@@ -18,6 +18,7 @@ die() { printf '[deploy] ERROR: %s\n' "$*" >&2; exit 1; }
 compose() { docker compose --project-directory "$STACK_DIR" "$@"; }
 
 [ -f "$ENV_FILE" ] || die "no $ENV_FILE yet: cp .env.example .env, set DOMAIN, then re-run the deploy"
+[ -w "$ENV_FILE" ] || die "$ENV_FILE is not writable by $(id -un) (the deploy writes WEB_TAG there): sudo chown $(id -un): $ENV_FILE"
 for key in DOMAIN VITE_API_URL VITE_MAPBIOMAS_URL VITE_BASEMAP_DARK VITE_BASEMAP_LIGHT VITE_BASEMAP_SATELLITE; do
   grep -Eq "^$key=.+" "$ENV_FILE" || die "$key is missing or empty in $ENV_FILE (see .env.example)"
 done
