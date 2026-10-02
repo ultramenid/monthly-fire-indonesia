@@ -185,7 +185,7 @@ export function MapControls({ map, s, bbox, drawing }: Props) {
           </button>
           {pop === 'landcover' && (
             <div className="pop menu" style={{ top: 42, left: 0, minWidth: '100%' }} role="menu">
-              {[{ id: undefined, label: t.allLandCover }, ...landCovers.map((l) => ({ id: l.id, label: name(l) }))].map((o) => (
+              {[{ id: undefined, label: t.allLandCover[0].toUpperCase() + t.allLandCover.slice(1) /* lowercase in i18n for the "Showing …" pill */ }, ...landCovers.map((l) => ({ id: l.id, label: name(l) }))].map((o) => (
                 <button
                   key={o.id ?? 'all'}
                   className="menu-item"
