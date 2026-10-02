@@ -102,12 +102,12 @@ jobs:
           # The server runs the deploy script from its own checkout, reset to main: deploy logic is versioned with the code.
           $SSH "set -e; export GIT_TERMINAL_PROMPT=0
             DIR=${DEPLOY_PATH:-\$HOME/monthly-fire-indonesia}
-            # First run: create the folder. The deploy user can't write to root-owned parents like /srv, but it can
-            # run Docker (root on this box), so a throwaway container creates it and hands it over: a one-time sudo.
+            # First run: create the folder. Parents like /srv belong to root, so use sudo (non-interactive:
+            # CI has no terminal, the SSH user needs passwordless sudo) and hand the folder to the SSH user.
             mkdir -p \"\$DIR\" 2>/dev/null || true
             if [ ! -w \"\$DIR\" ]; then
-              docker run --rm -v \"\$(dirname \"\$DIR\"):/parent\" alpine:3 \\
-                sh -c \"mkdir -p /parent/\$(basename \"\$DIR\") && chown \$(id -u):\$(id -g) /parent/\$(basename \"\$DIR\")\"
+              sudo -n mkdir -p \"\$DIR\" && sudo -n chown \"\$(id -un):\$(id -gn)\" \"\$DIR\" \\
+                || { echo \"Cannot create \$DIR: give \$(id -un) passwordless sudo, or run once: sudo mkdir -p \$DIR && sudo chown \$(id -un): \$DIR\"; exit 1; }
             fi
             [ -d \"\$DIR/.git\" ] || git clone $REPO \"\$DIR\"
             cd \"\$DIR\" && git fetch origin main && git reset --hard origin/main

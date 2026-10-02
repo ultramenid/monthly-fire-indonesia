@@ -26,8 +26,8 @@ if [ ! -f "$ENV_FILE" ]; then
   log "created $ENV_FILE from .env.example"
 fi
 if [ ! -w "$ENV_FILE" ]; then
-  # e.g. created with sudo: hand it back to the deploy user (Docker runs as root here, same as a one-time sudo chown)
-  docker run --rm -v "$STACK_DIR:/stack" alpine:3 chown "$(id -u):$(id -g)" /stack/.env
+  # e.g. created as root: hand it back to the deploy user (needs passwordless sudo)
+  sudo -n chown "$(id -un):$(id -gn)" "$ENV_FILE" || die "$ENV_FILE is not writable by $(id -un): sudo chown $(id -un): $ENV_FILE"
 fi
 grep -q "^DOMAIN=\"\?$PLACEHOLDER_DOMAIN" "$ENV_FILE" \
   && die "set DOMAIN in $ENV_FILE (still $PLACEHOLDER_DOMAIN), or add a DOMAIN secret/variable before the first deploy"
