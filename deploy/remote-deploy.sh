@@ -77,9 +77,10 @@ compose up -d --no-build --remove-orphans
 if wait_healthy; then
   rm -f "$ENV_ROLLBACK"
   log "deploy OK: healthy and serving the app"
-  log "removing unused images older than ${IMAGE_KEEP_HOURS}h"
-  docker image prune -af --filter "until=${IMAGE_KEEP_HOURS}h" || true
-  docker builder prune -f --filter "until=${IMAGE_KEEP_HOURS}h" || true
+  # Only this project's images (label set by CI): the server is shared with other stacks.
+  log "removing this project's unused images older than ${IMAGE_KEEP_HOURS}h"
+  docker image prune -af --filter "until=${IMAGE_KEEP_HOURS}h" \
+    --filter "label=org.opencontainers.image.source=https://github.com/ultramenid/monthly-fire-indonesia" || true
   exit 0
 fi
 

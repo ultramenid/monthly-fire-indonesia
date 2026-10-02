@@ -103,7 +103,7 @@ No web server on the box? Set `COMPOSE_PROFILES=caddy` and `DOMAIN="a.com, www.a
 | `release.yml` | push to `main` | `changes` (diff since tag `deployed/prod`) → `ci` → `build-web` (image to `ghcr.io/ultramenid/monthly-fire-indonesia:sha-<commit>` + `latest`) → `deploy-prod` → `tag-deployed-prod` |
 | `deploy.yml` | called by `release.yml`, or run by hand to roll back | SSH (host key pinned if `SSH_KNOWN_HOSTS` is set), then `deploy/remote-deploy.sh <tag>` on the server |
 
-On the server, `deploy/remote-deploy.sh` (from the checkout just reset to `origin/main`) writes `WEB_TAG` into `.env`, pulls and starts the image, waits until it is healthy and serves the app, and otherwise rolls back to the previous tag. After a good deploy it removes unused images and build cache older than 1 day.
+On the server, `deploy/remote-deploy.sh` (from the checkout just reset to `origin/main`) writes `WEB_TAG` into `.env`, pulls and starts the image, waits until it is healthy and serves the app, and otherwise rolls back to the previous tag. After a good deploy it removes this project's unused images older than 1 day (other stacks on the server are left alone).
 
 **Rollback:** Actions → Deploy → Run workflow → tag `sha-<older commit>`.
 
@@ -113,4 +113,4 @@ On the server, `deploy/remote-deploy.sh` (from the checkout just reset to `origi
 2. GitHub → Settings → Secrets and variables → Actions → Secrets: `SSH_HOST`, `SSH_USER`, `SSH_KEY` (private key), and `SSH_PASSPHRASE` only if the key has one. Optional:
    - `SSH_KNOWN_HOSTS` pins the server's host key (output of `ssh-keyscan <SSH_HOST>` from a trusted machine, same name/IP as `SSH_HOST`). Without it the deploy trusts the key the server shows when it connects.
    - Variable `DEPLOY_PATH` changes the server folder (default `~/monthly-fire-indonesia`).
-3. Push to `main`. The first deploy clones the repo on the server and stops because `.env` is missing: The deploy creates the folder (with `sudo -n` when the parent is root-owned, so the SSH user needs passwordless sudo the first time) and `.env` from `.env.example`. Add the nginx site above. Later changes to `.env` apply on the next deploy or `docker compose up -d`; no rebuild needed.
+3. Push to `main`. The first deploy creates the folder (with `sudo -n` when the parent is root-owned, so the SSH user needs passwordless sudo the first time) and `.env` from `.env.example`. Add the nginx site above. Later changes to `.env` apply on the next deploy or `docker compose up -d`; no rebuild needed.
