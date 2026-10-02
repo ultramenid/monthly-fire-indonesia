@@ -4,70 +4,77 @@ import { useTerritory, useVillageDistrict } from './api';
 import { useI18n } from './i18n';
 import { selectTerritory } from './state';
 
-type Ref = { type: string; code: number };
+type TerritoryRef = { type: string; code: number };
 
-// Province code's first digit → region code (BPS numbering; verified against /ranking/country/1/region).
-const REGION_OF: Record<string, number> = { 1: 1, 2: 1, 3: 2, 5: 4, 6: 3, 7: 5, 8: 6, 9: 7 };
+// First digit of a province code → its island (region) code, following BPS numbering.
+const REGION_BY_PROVINCE_DIGIT: Record<string, number> = { 1: 1, 2: 1, 3: 2, 5: 4, 6: 3, 7: 5, 8: 6, 9: 7 };
 
-/** Admin ancestors derived from nested BPS codes (villages via their district). Thematic areas fall back to parentLabel. */
-export function ancestors({ type, code }: Ref, district?: number | null): Ref[] {
-  const s = String(code);
-  const province = (p: string): Ref[] => [{ type: 'region', code: REGION_OF[p[0]] }, { type: 'province', code: +p }];
+/**
+ * Parent territories worked out from nested BPS codes, e.g. regency 6104 → province 61 → region 3.
+ * Village codes aren't nested, so for a village the caller passes its district code.
+ */
+function ancestorsOf({ type, code }: TerritoryRef, villageDistrict?: number | null): TerritoryRef[] {
+  const digits = String(code);
+  const provinceAndRegion = (provinceCode: string): TerritoryRef[] => [
+    { type: 'region', code: REGION_BY_PROVINCE_DIGIT[provinceCode[0]] },
+    { type: 'province', code: Number(provinceCode) },
+  ];
   switch (type) {
     case 'province':
-      return province(s).slice(0, 1);
+      return provinceAndRegion(digits).slice(0, 1);
     case 'regency':
-      return province(s.slice(0, 2));
+      return provinceAndRegion(digits.slice(0, 2));
     case 'district':
-      return [...province(s.slice(0, 2)), { type: 'regency', code: +s.slice(0, 4) }];
-    case 'village': // codes aren't nested; caller passes the district (see useVillageDistrict)
-      return district ? [...ancestors({ type: 'district', code: district }), { type: 'district', code: district }] : [];
+      return [...provinceAndRegion(digits.slice(0, 2)), { type: 'regency', code: Number(digits.slice(0, 4)) }];
+    case 'village':
+      if (!villageDistrict) return [];
+      return [...ancestorsOf({ type: 'district', code: villageDistrict }), { type: 'district', code: villageDistrict }];
     default:
       return [];
   }
 }
 
-function Crumb({ r }: { r: Ref }) {
-  const { data } = useTerritory(r.type, r.code);
+function Crumb({ territory }: { territory: TerritoryRef }) {
+  const { data } = useTerritory(territory.type, territory.code);
   return (
-    <button className="crumb" onClick={() => selectTerritory(r.type, r.code)}>
+    <button className="font-normal text-muted hover:text-fg hover:underline" onClick={() => selectTerritory(territory.type, territory.code)}>
       {data?.name ?? '…'}
     </button>
   );
 }
 
-export function Breadcrumb({ type, code, name, parentLabel }: Ref & { name: string; parentLabel?: string | null }) {
-  const { t } = useI18n();
-  const isRoot = type === 'country';
-  const district = useVillageDistrict(code, type === 'village').data;
-  const up = ancestors({ type, code }, district);
-  const chain: Ref[] = isRoot ? [] : [{ type: 'country', code: 1 }, ...up];
-  const parent = chain.at(-1);
-  // parentLabel adds the one level we can't derive from codes (village → district, thematic areas)
-  const extra = !isRoot && up.length === 0 && parentLabel && parentLabel !== 'Indonesia' ? parentLabel : null;
+const Separator = () => <span className="text-muted">/</span>;
+
+export function Breadcrumb({ type, code, name, parentLabel }: TerritoryRef & { name: string; parentLabel?: string | null }) {
+  const { labels } = useI18n();
+  const isCountry = type === 'country';
+  const villageDistrict = useVillageDistrict(code, type === 'village').data;
+  const ancestors = ancestorsOf({ type, code }, villageDistrict);
+  const trail: TerritoryRef[] = isCountry ? [] : [{ type: 'country', code: 1 }, ...ancestors];
+  const parent = trail.at(-1);
+  // Thematic areas (parks, concessions…) have no code-based parents; the API's parentLabel names one instead.
+  const labelOnlyParent = !isCountry && ancestors.length === 0 && parentLabel && parentLabel !== 'Indonesia' ? parentLabel : null;
 
   return (
-    <nav className="crumbs" aria-label="breadcrumb">
+    <nav className="flex min-h-8 items-center gap-2 overflow-x-auto border-b bg-bg px-4 py-1 font-bold whitespace-nowrap" aria-label="breadcrumb">
       {parent && (
-        <button className="back" aria-label={t.back} onClick={() => selectTerritory(parent.type, parent.code)}>
+        <button className="grid text-fg" aria-label={labels.back} onClick={() => selectTerritory(parent.type, parent.code)}>
           <Undo2 size={16} />
         </button>
       )}
-      {chain.map((r) => (
-        <Fragment key={`${r.type}:${r.code}`}>
-          <Crumb r={r} />
-          <span className="sep">/</span>
+      {trail.map((territory) => (
+        <Fragment key={`${territory.type}:${territory.code}`}>
+          <Crumb territory={territory} />
+          <Separator />
         </Fragment>
       ))}
-      {extra && (
+      {labelOnlyParent && (
         <>
-          <span className="crumb" style={{ color: 'var(--muted)', fontWeight: 400 }}>
-            {extra}
-          </span>
-          <span className="sep">/</span>
+          <span className="font-normal text-muted">{labelOnlyParent}</span>
+          <Separator />
         </>
       )}
-      <span className="current">{name}</span>
+      <span className="text-accent-icon">{name}</span>
     </nav>
   );
 }

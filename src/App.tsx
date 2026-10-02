@@ -2,36 +2,41 @@ import { useEffect } from 'react';
 import { useMonths, useTerritory, useYears } from './api';
 import { Breadcrumb } from './Breadcrumb';
 import { Header } from './Header';
-import { MapView } from './MapView';
-import { Stats } from './Stats';
+import { MapView } from './map/MapView';
+import { Stats } from './stats/Stats';
 import { setState, useAppState } from './state';
-import { Toaster } from './ui';
+import { ApiStatus, Toaster } from './ui';
 
 export default function App() {
-  const s = useAppState();
+  const state = useAppState();
 
-  // default period: latest year, all available months
+  // Default period: the latest year with all its months. An old link may hold a year the API no longer offers.
   const years = useYears().data;
-  const months = useMonths(s.year).data;
+  const months = useMonths(state.year).data;
   useEffect(() => {
-    if (!s.year && years?.length) setState({ year: Math.max(...years) });
-  }, [s.year, years]);
+    if (years?.length && (!state.year || !years.includes(state.year))) setState({ year: Math.max(...years) });
+  }, [state.year, years]);
   useEffect(() => {
-    if (months?.length && (!s.monthStart || !s.monthEnd)) setState({ monthStart: s.monthStart ?? months[0], monthEnd: s.monthEnd ?? months.at(-1) });
-  }, [months, s.monthStart, s.monthEnd]);
+    if (months?.length && (!state.monthStart || !state.monthEnd)) {
+      setState({ monthStart: state.monthStart ?? months[0], monthEnd: state.monthEnd ?? months.at(-1) });
+    }
+  }, [months, state.monthStart, state.monthEnd]);
 
-  const territory = useTerritory(s.type, s.code).data;
-  const name = s.type === 'country' ? 'Indonesia' : (territory?.name ?? '…');
-  useEffect(() => void (document.title = `${name} · MapBiomas Fogo`), [name]);
+  const territory = useTerritory(state.type, state.code).data;
+  const territoryName = state.type === 'country' ? 'Indonesia' : (territory?.name ?? '…');
+  useEffect(() => {
+    document.title = `${territoryName} · MapBiomas Fogo`;
+  }, [territoryName]);
 
   return (
-    <div className="app">
-      <Header currentName={name} />
-      <Breadcrumb type={s.type} code={s.code} name={name} parentLabel={territory?.parentLabel} />
-      <main className="main">
-        <MapView s={s} />
-        <Stats s={s} />
+    <div className="grid h-full grid-rows-[44px_auto_1fr] overflow-hidden mobile:h-auto mobile:min-h-full mobile:grid-cols-[minmax(0,1fr)] mobile:grid-rows-[44px_auto_auto] mobile:overflow-auto">
+      <Header currentName={territoryName} />
+      <Breadcrumb type={state.type} code={state.code} name={territoryName} parentLabel={territory?.parentLabel} />
+      <main className="grid min-h-0 grid-cols-[1fr_400px] mobile:grid-cols-1">
+        <MapView state={state} />
+        <Stats state={state} />
       </main>
+      <ApiStatus />
       <Toaster />
     </div>
   );

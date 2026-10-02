@@ -12,9 +12,6 @@ dist-ssr
 !.env.example
 *.local
 
-# Vercel
-.vercel
-
 # Logs
 logs
 *.log

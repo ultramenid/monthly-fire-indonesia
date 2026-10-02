@@ -1,0 +1,31 @@
+# Production: `cp .env.example .env`, set DOMAIN (DNS pointing here), then `docker compose up -d --build`.
+# All settings (VITE_* and DOMAIN) come from this .env; rebuild after changing any of them.
+# Caddy serves https://$DOMAIN (comma-separated list allowed) with an automatic certificate and proxies to the site.
+services:
+  web:
+    build:
+      context: .
+      args:
+        VITE_API_URL: ${VITE_API_URL:?set in .env}
+        VITE_MAPBIOMAS_URL: ${VITE_MAPBIOMAS_URL:?set in .env}
+        VITE_BASEMAP_DARK: ${VITE_BASEMAP_DARK:?set in .env}
+        VITE_BASEMAP_LIGHT: ${VITE_BASEMAP_LIGHT:?set in .env}
+        VITE_BASEMAP_SATELLITE: ${VITE_BASEMAP_SATELLITE:?set in .env}
+    restart: unless-stopped
+
+  caddy:
+    image: caddy:2-alpine
+    environment:
+      DOMAIN: ${DOMAIN:?set in .env}
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+    depends_on:
+      - web
+    restart: unless-stopped
+
+volumes:
+  caddy_data:

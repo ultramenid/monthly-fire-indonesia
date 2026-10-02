@@ -1,92 +1,105 @@
 import { useEffect, useState } from 'react';
-import { ArrowRight, Code2, EllipsisVertical, Languages, Moon, Search, Sparkles, Sun, X } from 'lucide-react';
+import { ArrowRight, Code2, EllipsisVertical, Languages, Moon, Search, Sun, X } from 'lucide-react';
+import { API } from './api';
 import { LANGS, useI18n } from './i18n';
 import { Palette } from './Palette';
-import { useDismiss, useTheme } from './ui';
+import { useDismiss, useTheme } from './hooks';
+import { Overlay } from './ui';
 
-const API_DOCS = 'https://fogo-id.geodatin.com/api/docs/';
-const MAPBIOMAS = 'https://fire.mapbiomas.id/en';
+const API_DOCS_URL = `${API}/docs/`;
+const MAPBIOMAS_URL = import.meta.env.VITE_MAPBIOMAS_URL;
 
-export function Logo() {
+const navButton = 'inline-flex h-8 items-center gap-2 rounded-lg px-3 font-bold text-accent-text no-underline hover:bg-chip';
+const drawerLink = 'flex w-full items-center justify-between px-4 py-2.5 text-left text-base font-bold text-fg-2 no-underline';
+
+function Logo() {
   const [theme] = useTheme();
   return (
-    <a className="logo" href="/" aria-label="MapBiomas Indonesia Fire">
-      {/* from fire.mapbiomas.id: the on-dark version has white lettering */}
-      <img src={theme === 'dark' ? '/logo-dark.png' : '/logo-light.png'} alt="MapBiomas Indonesia Fire" width={129} height={30} />
+    <a className="flex shrink-0 items-center gap-2 no-underline" href="/" aria-label="MapBiomas Indonesia Fire">
+      <img
+        className="mobile:h-[30px] mobile:w-9 mobile:object-cover mobile:object-left"
+        src={theme === 'dark' ? '/logo-dark.png' : '/logo-light.png'}
+        alt="MapBiomas Indonesia Fire"
+        width={129}
+        height={30}
+      />
     </a>
   );
 }
 
-/** Header search box: shows the current territory; clicking it opens the Cmd+K palette. */
-export function TerritorySearch({ currentName, onPalette }: { currentName: string; onPalette: () => void }) {
-  const { t } = useI18n();
-  const mac = /Mac|iPhone|iPad/.test(navigator.platform);
+/** Shows the current territory; clicking it opens the Cmd+K search palette. */
+function TerritorySearch({ currentName, onOpen }: { currentName: string; onOpen: () => void }) {
+  const { labels } = useI18n();
+  const isMac = /Mac|iPhone|iPad/.test(navigator.platform);
   return (
-    <div className="header-search">
-      <button className="search-box" aria-label={t.search} aria-haspopup="dialog" onClick={onPalette}>
-        <Search size={16} color="var(--muted)" />
-        <span className="search-current" title={currentName || undefined}>
-          {currentName || t.search}
+    <div className="relative min-w-[200px] flex-[0_1_380px] mobile:min-w-0 mobile:flex-1">
+      <button
+        className="flex h-8 w-full items-center gap-1.5 rounded-full border bg-bg px-3 text-left text-fg"
+        aria-label={labels.search}
+        aria-haspopup="dialog"
+        onClick={onOpen}
+      >
+        <Search size={16} className="text-muted" />
+        <span className="min-w-0 flex-1 truncate" title={currentName || undefined}>
+          {currentName || labels.search}
         </span>
-        <kbd className="kbd hide-mobile">{mac ? '⌘K' : 'Ctrl K'}</kbd>
+        <kbd className="rounded border px-1.5 py-px font-sans text-[11px] leading-4 font-semibold whitespace-nowrap text-muted mobile:hidden">
+          {isMac ? '⌘K' : 'Ctrl K'}
+        </kbd>
       </button>
     </div>
   );
 }
 
 export function Header({ currentName }: { currentName: string }) {
-  const { t, lang, setLang } = useI18n();
+  const { labels, lang, setLang } = useI18n();
   const [theme, setTheme] = useTheme();
-  const [langOpen, setLangOpen] = useState(false);
-  const [drawer, setDrawer] = useState(false);
-  const [highlights, setHighlights] = useState(false);
-  const langRef = useDismiss<HTMLDivElement>(langOpen, () => setLangOpen(false));
-  const [palette, setPalette] = useState(false);
+  const [isLangMenuOpen, setLangMenuOpen] = useState(false);
+  const [isDrawerOpen, setDrawerOpen] = useState(false);
+  const [isPaletteOpen, setPaletteOpen] = useState(false);
+  const langMenuRef = useDismiss<HTMLDivElement>(isLangMenuOpen, () => setLangMenuOpen(false));
 
   useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
-        e.preventDefault();
-        setPalette((o) => !o);
+    const onKeyDown = (event: KeyboardEvent) => {
+      if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'k') {
+        event.preventDefault();
+        setPaletteOpen((open) => !open);
       }
     };
-    document.addEventListener('keydown', onKey);
-    return () => document.removeEventListener('keydown', onKey);
+    document.addEventListener('keydown', onKeyDown);
+    return () => document.removeEventListener('keydown', onKeyDown);
   }, []);
 
   return (
-    <header className="header">
+    <header className="relative z-20 flex items-center gap-4 bg-surface px-4 mobile:gap-1 mobile:px-2">
       <Logo />
-      <TerritorySearch currentName={currentName} onPalette={() => setPalette(true)} />
-      {palette && <Palette onClose={() => setPalette(false)} />}
-      <button className="nav-btn hide-mobile" aria-pressed={highlights} onClick={() => setHighlights((h) => !h)}>
-        <Sparkles size={16} /> {t.highlights}
-      </button>
-      <a className="nav-btn hide-mobile" href={API_DOCS} target="_blank" rel="noreferrer">
-        <Code2 size={16} /> {t.api}
+      <TerritorySearch currentName={currentName} onOpen={() => setPaletteOpen(true)} />
+      {isPaletteOpen && <Palette onClose={() => setPaletteOpen(false)} />}
+      <a className={`${navButton} mobile:hidden`} href={API_DOCS_URL} target="_blank" rel="noreferrer">
+        <Code2 size={16} /> {labels.api}
       </a>
-      <span className="spacer" />
-      <a className="nav-btn hide-mobile" href={MAPBIOMAS} target="_blank" rel="noreferrer">
-        {t.goTo}
+      <span className="flex-1" />
+      <a className={`${navButton} mobile:hidden`} href={MAPBIOMAS_URL} target="_blank" rel="noreferrer">
+        {labels.goTo}
       </a>
-      <div style={{ position: 'relative' }} ref={langRef} className="hide-mobile">
-        <button className="icon-btn" aria-label={t.language} onClick={() => setLangOpen((o) => !o)}>
+      <div className="relative mobile:hidden" ref={langMenuRef}>
+        <button className="icon-btn" aria-label={labels.language} onClick={() => setLangMenuOpen((open) => !open)}>
           <Languages size={20} />
         </button>
-        {langOpen && (
-          <div className="pop menu" style={{ right: 0, top: 40 }} role="menu">
-            {LANGS.map((l) => (
+        {isLangMenuOpen && (
+          <div className="pop top-10 right-0 max-h-[360px] min-w-40 overflow-auto" role="menu">
+            {LANGS.map((option) => (
               <button
-                key={l.id}
+                key={option.id}
                 className="menu-item"
                 role="menuitemradio"
-                aria-checked={lang === l.id}
+                aria-checked={lang === option.id}
                 onClick={() => {
-                  setLang(l.id);
-                  setLangOpen(false);
+                  setLang(option.id);
+                  setLangMenuOpen(false);
                 }}
               >
-                {l.label}
+                {option.label}
               </button>
             ))}
           </div>
@@ -94,45 +107,47 @@ export function Header({ currentName }: { currentName: string }) {
       </div>
       <button
         className="icon-btn"
-        aria-label={theme === 'dark' ? t.darkTheme : t.lightTheme}
+        aria-label={theme === 'dark' ? labels.darkTheme : labels.lightTheme}
         aria-pressed={theme === 'light'}
         onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
       >
         {theme === 'dark' ? <Sun size={20} /> : <Moon size={20} />}
       </button>
-      <button className="icon-btn" aria-label={t.menu} onClick={() => setDrawer(true)}>
+      <button className="icon-btn" aria-label={labels.menu} onClick={() => setDrawerOpen(true)}>
         <EllipsisVertical size={20} />
       </button>
 
-      {drawer && (
-        <div className="overlay" style={{ placeItems: 'stretch' }} onPointerDown={(e) => e.target === e.currentTarget && setDrawer(false)}>
-          <aside className="drawer" role="dialog" aria-label={t.menu}>
-            <div className="drawer-head">
+      {isDrawerOpen && (
+        <Overlay onClose={() => setDrawerOpen(false)} className="place-items-stretch">
+          <aside className="fixed inset-y-0 right-0 z-60 flex w-[min(314px,100vw)] flex-col bg-bg shadow-pop" role="dialog" aria-label={labels.menu}>
+            <div className="flex items-center justify-between border-b py-1 pr-2 pl-4">
               <Logo />
-              <button className="icon-btn" aria-label={t.close} onClick={() => setDrawer(false)}>
+              <button className="icon-btn" aria-label={labels.close} onClick={() => setDrawerOpen(false)}>
                 <X size={22} />
               </button>
             </div>
-            <a className="drawer-link" href={MAPBIOMAS} target="_blank" rel="noreferrer">
-              {t.goTo} <ArrowRight size={18} />
+            <a className={drawerLink} href={MAPBIOMAS_URL} target="_blank" rel="noreferrer">
+              {labels.goTo} <ArrowRight size={18} />
             </a>
-            <button className="drawer-link" onClick={() => (setHighlights(true), setDrawer(false))}>
-              {t.highlights} <ArrowRight size={18} />
-            </button>
-            <a className="drawer-link" href={API_DOCS} target="_blank" rel="noreferrer">
-              {t.api} <ArrowRight size={18} />
+            <a className={drawerLink} href={API_DOCS_URL} target="_blank" rel="noreferrer">
+              {labels.api} <ArrowRight size={18} />
             </a>
-            <div className="drawer-foot">
-              <select aria-label={t.language} value={lang} onChange={(e) => setLang(e.target.value as typeof lang)}>
-                {LANGS.map((l) => (
-                  <option key={l.id} value={l.id}>
-                    {l.label}
+            <div className="mt-auto p-4">
+              <select
+                className="h-9 w-full rounded-lg border bg-bg px-2"
+                aria-label={labels.language}
+                value={lang}
+                onChange={(event) => setLang(event.target.value as typeof lang)}
+              >
+                {LANGS.map((option) => (
+                  <option key={option.id} value={option.id}>
+                    {option.label}
                   </option>
                 ))}
               </select>
             </div>
           </aside>
-        </div>
+        </Overlay>
       )}
     </header>
   );

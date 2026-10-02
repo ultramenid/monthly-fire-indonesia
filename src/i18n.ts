@@ -1,6 +1,5 @@
-import { usePref } from './state';
+import { usePrefs, type Lang } from './state';
 
-export type Lang = 'en' | 'id' | 'pt';
 export const LANGS: { id: Lang; label: string }[] = [
   { id: 'en', label: 'English' },
   { id: 'id', label: 'Bahasa Indonesia' },
@@ -9,7 +8,6 @@ export const LANGS: { id: Lang; label: string }[] = [
 
 const en = {
   search: 'Search',
-  highlights: 'Highlights',
   api: 'API',
   goTo: 'Go to MapBiomas!',
   statistics: 'Statistics',
@@ -28,8 +26,8 @@ const en = {
   rankDesc: 'Ranking of the territories most affected by the fires, according to the territorial grouping and selected period.',
   removePaint: 'Remove paint',
   paintMap: 'Paint map',
-    groupingTitle: 'Region',
-    by: 'By',
+  groupingTitle: 'Region',
+  by: 'By',
   landCoverLabel: 'Land cover',
   basemap: 'Basemap',
   dark: 'Dark',
@@ -44,13 +42,14 @@ const en = {
   download: 'Download',
   selectYear: 'Select the year',
   cancel: 'Cancel',
-  apply: 'Apply',
   lat: 'Lat',
   lng: 'Lng',
   coordsPlaceholder: 'lat, lng',
   linkCopied: 'Link copied to clipboard',
   noData: 'No data for this period',
   error: 'Could not load data',
+  retry: 'Retry',
+  offline: 'Cannot reach the data server. Retrying automatically…',
   darkTheme: 'Dark Theme',
   lightTheme: 'Light Theme',
   language: 'Language',
@@ -70,16 +69,15 @@ const en = {
   allGroups: 'All groups',
   paletteKeys: '↑↓ select · Enter open · Esc or click outside to close',
   territories: 'territories',
-    refineSearch: 'type more or pick a group to narrow down',
+  refineSearch: 'type more or pick a group to narrow down',
   typeToSearch: 'Type at least 2 letters to search',
   noResults: 'No territories found',
-    searching: 'Searching…',
+  searching: 'Searching…',
 };
 type Dict = typeof en;
 
 const id: Dict = {
   search: 'Cari',
-  highlights: 'Sorotan',
   api: 'API',
   goTo: 'Kunjungi MapBiomas!',
   statistics: 'Statistik',
@@ -98,8 +96,8 @@ const id: Dict = {
   rankDesc: 'Peringkat wilayah yang paling terdampak kebakaran, menurut pengelompokan wilayah dan periode yang dipilih.',
   removePaint: 'Hapus warna',
   paintMap: 'Warnai peta',
-    groupingTitle: 'Regio',
-    by: 'Per',
+  groupingTitle: 'Regio',
+  by: 'Per',
   landCoverLabel: 'Tutupan lahan',
   basemap: 'Peta dasar',
   dark: 'Gelap',
@@ -114,13 +112,14 @@ const id: Dict = {
   download: 'Unduh',
   selectYear: 'Pilih tahun',
   cancel: 'Batal',
-  apply: 'Terapkan',
   lat: 'Lat',
   lng: 'Lng',
   coordsPlaceholder: 'lat, lng',
   linkCopied: 'Tautan disalin',
   noData: 'Tidak ada data untuk periode ini',
   error: 'Gagal memuat data',
+  retry: 'Coba lagi',
+  offline: 'Tidak dapat terhubung ke server data. Mencoba lagi otomatis…',
   darkTheme: 'Tema Gelap',
   lightTheme: 'Tema Terang',
   language: 'Bahasa',
@@ -140,15 +139,14 @@ const id: Dict = {
   allGroups: 'Semua kelompok',
   paletteKeys: '↑↓ pilih · Enter buka · Esc atau klik di luar untuk tutup',
   territories: 'wilayah',
-    refineSearch: 'ketik lebih banyak atau pilih grup untuk mempersempit',
+  refineSearch: 'ketik lebih banyak atau pilih grup untuk mempersempit',
   typeToSearch: 'Ketik minimal 2 huruf untuk mencari',
   noResults: 'Wilayah tidak ditemukan',
-    searching: 'Mencari…',
+  searching: 'Mencari…',
 };
 
 const pt: Dict = {
   search: 'Buscar',
-  highlights: 'Destaques',
   api: 'API',
   goTo: 'Ir para o MapBiomas!',
   statistics: 'Estatísticas',
@@ -167,8 +165,8 @@ const pt: Dict = {
   rankDesc: 'Ranking dos territórios mais afetados pelo fogo, de acordo com o agrupamento territorial e o período selecionado.',
   removePaint: 'Remover pintura',
   paintMap: 'Pintar mapa',
-    groupingTitle: 'Região',
-    by: 'Por',
+  groupingTitle: 'Região',
+  by: 'Por',
   landCoverLabel: 'Cobertura do solo',
   basemap: 'Mapa base',
   dark: 'Escuro',
@@ -183,13 +181,14 @@ const pt: Dict = {
   download: 'Baixar',
   selectYear: 'Selecione o ano',
   cancel: 'Cancelar',
-  apply: 'Aplicar',
   lat: 'Lat',
   lng: 'Lng',
   coordsPlaceholder: 'lat, lng',
   linkCopied: 'Link copiado',
   noData: 'Sem dados para este período',
   error: 'Não foi possível carregar os dados',
+  retry: 'Tentar novamente',
+  offline: 'Não foi possível conectar ao servidor de dados. Tentando novamente…',
   darkTheme: 'Tema Escuro',
   lightTheme: 'Tema Claro',
   language: 'Idioma',
@@ -209,25 +208,25 @@ const pt: Dict = {
   allGroups: 'Todos os grupos',
   paletteKeys: '↑↓ selecionar · Enter abrir · Esc ou clique fora para fechar',
   territories: 'territórios',
-    refineSearch: 'digite mais ou escolha um grupo para refinar',
+  refineSearch: 'digite mais ou escolha um grupo para refinar',
   typeToSearch: 'Digite pelo menos 2 letras para buscar',
   noResults: 'Nenhum território encontrado',
-    searching: 'Buscando…',
+  searching: 'Buscando…',
 };
 
 const dicts = { en, id, pt };
 
 export function useI18n() {
-  const [lang, setLang] = usePref<Lang>('lang', 'en');
-  const t = dicts[lang] ?? en;
-  /** Pick the localized name from API objects ({namePt,nameId,nameEn} or {pt,id,en}). */
-  const name = (o?: Record<string, unknown> | null): string => {
-    if (!o) return '';
-    const key = { en: 'En', id: 'Id', pt: 'Pt' }[lang];
-    return String(o[`name${key}`] ?? o[lang] ?? o.nameEn ?? o.en ?? '');
+  const { lang, setLang } = usePrefs();
+  const labels = dicts[lang] ?? en;
+  // API objects carry names as {namePt, nameId, nameEn} or {pt, id, en}
+  const name = (item?: Record<string, unknown> | null): string => {
+    if (!item) return '';
+    const suffix = { en: 'En', id: 'Id', pt: 'Pt' }[lang];
+    return String(item[`name${suffix}`] ?? item[lang] ?? item.nameEn ?? item.en ?? '');
   };
-  const nf = new Intl.NumberFormat(lang === 'en' ? 'en-US' : lang, { maximumFractionDigits: 0 });
-  const ha = (v?: number | null) => `${nf.format(v ?? 0)} ha`;
-  const month = (m: number) => new Intl.DateTimeFormat(lang, { month: 'short' }).format(new Date(2000, m - 1, 1)).replace('.', '');
-  return { lang, setLang, t, name, ha, nf, month };
+  const numberFormat = new Intl.NumberFormat(lang === 'en' ? 'en-US' : lang, { maximumFractionDigits: 0 });
+  const formatHa = (value?: number | null) => `${numberFormat.format(value ?? 0)} ha`;
+  const monthName = (month: number) => new Intl.DateTimeFormat(lang, { month: 'short' }).format(new Date(2000, month - 1, 1)).replace('.', '');
+  return { lang, setLang, labels, name, formatHa, numberFormat, monthName };
 }

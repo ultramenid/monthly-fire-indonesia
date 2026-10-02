@@ -1,58 +1,36 @@
-import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { useEffect, useRef, useState, useSyncExternalStore, type ReactNode } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import { X } from 'lucide-react';
 import * as echarts from 'echarts/core';
 import { BarChart, PieChart } from 'echarts/charts';
 import { GridComponent, TooltipComponent } from 'echarts/components';
 import { SVGRenderer } from 'echarts/renderers';
-import { usePref } from './state';
+import { useI18n } from './i18n';
+import { onToast } from './lib/browser';
 
 echarts.use([BarChart, PieChart, GridComponent, TooltipComponent, SVGRenderer]);
 
-export type Theme = 'dark' | 'light';
-/** Theme pref; the `data-theme` attribute is kept in sync so CSS tokens switch before any render reads them. */
-export function useTheme(): [Theme, (t: Theme) => void] {
-  const [theme, set] = usePref<Theme>('theme', 'dark');
-  return [theme, (t) => ((document.documentElement.dataset.theme = t), set(t))];
-}
-
-/** Current CSS token values, re-read when the theme flips (charts and map need raw colors). */
-export function useTokens() {
-  const [theme] = useTheme();
-  const read = () => {
-    const s = getComputedStyle(document.documentElement);
-    const v = (k: string) => s.getPropertyValue(`--${k}`).trim();
-    return { theme, text: v('text'), text2: v('text-2'), muted: v('muted'), border: v('border'), chart: v('chart'), bg: v('bg'), surface: v('surface'), primary: v('primary') };
-  };
-  return useMemo(read, [theme]); // eslint-disable-line react-hooks/exhaustive-deps
-}
-
-/** Closes on outside click / Escape. */
-export function useDismiss<T extends HTMLElement>(open: boolean, close: () => void) {
-  const ref = useRef<T>(null);
-  useEffect(() => {
-    if (!open) return;
-    const onDown = (e: PointerEvent) => ref.current && !ref.current.contains(e.target as Node) && close();
-    const onKey = (e: KeyboardEvent) => e.key === 'Escape' && close();
-    document.addEventListener('pointerdown', onDown);
-    document.addEventListener('keydown', onKey);
-    return () => {
-      document.removeEventListener('pointerdown', onDown);
-      document.removeEventListener('keydown', onKey);
-    };
-  }, [open, close]);
-  return ref;
+/** Full-screen dimmed layer; clicking the dimmed area (not its content) calls onClose. */
+export function Overlay({ onClose, className = 'place-items-center', children }: { onClose: () => void; className?: string; children: ReactNode }) {
+  return (
+    <div className={`fixed inset-0 z-50 grid bg-overlay ${className}`} onPointerDown={(event) => event.target === event.currentTarget && onClose()}>
+      {children}
+    </div>
+  );
 }
 
 export function Modal({ title, onClose, children }: { title: ReactNode; onClose: () => void; children: ReactNode }) {
   useEffect(() => {
-    const onKey = (e: KeyboardEvent) => e.key === 'Escape' && onClose();
-    document.addEventListener('keydown', onKey);
-    return () => document.removeEventListener('keydown', onKey);
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') onClose();
+    };
+    document.addEventListener('keydown', onKeyDown);
+    return () => document.removeEventListener('keydown', onKeyDown);
   }, [onClose]);
   return (
-    <div className="overlay" onPointerDown={(e) => e.target === e.currentTarget && onClose()}>
-      <div className="modal" role="dialog" aria-modal="true">
-        <div className="modal-head">
+    <Overlay onClose={onClose}>
+      <div className="max-h-[calc(100vh-32px)] w-[min(900px,calc(100vw-32px))] overflow-auto rounded-xl border bg-bg p-4" role="dialog" aria-modal="true">
+        <div className="mb-3 flex items-center justify-between text-base font-bold">
           <span>{title}</span>
           <button className="icon-btn" onClick={onClose} aria-label="Close">
             <X size={20} />
@@ -60,64 +38,75 @@ export function Modal({ title, onClose, children }: { title: ReactNode; onClose:
         </div>
         {children}
       </div>
+    </Overlay>
+  );
+}
+
+export function Toaster() {
+  const [message, setMessage] = useState<string | null>(null);
+  useEffect(() => {
+    let timer: number;
+    onToast((next) => {
+      setMessage(next);
+      clearTimeout(timer);
+      timer = setTimeout(() => setMessage(null), 2200);
+    });
+  }, []);
+  if (!message) return null;
+  return (
+    <div className="fixed bottom-6 left-1/2 z-70 -translate-x-1/2 rounded-lg bg-fg px-4 py-2.5 font-semibold text-bg" role="status">
+      {message}
     </div>
   );
 }
 
-let pushToast: (m: string) => void = () => {};
-export const toast = (m: string) => pushToast(m);
-export function Toaster() {
-  const [msg, setMsg] = useState<string | null>(null);
+// "Unreachable" = the request itself failed (offline, blocked) or a gateway error.
+// A 4xx/500 from one endpoint is that endpoint's problem, not a connection problem.
+const isUnreachable = (error: unknown) => error instanceof TypeError || [502, 503, 504].includes((error as { status?: number } | null)?.status ?? 0);
+
+/** Banner while the API can't be reached; failed requests are retried every 15s. */
+export function ApiStatus() {
+  const { labels } = useI18n();
+  const queryClient = useQueryClient();
+  const cache = queryClient.getQueryCache();
+  const isDown = useSyncExternalStore(
+    (onChange) => cache.subscribe(onChange),
+    () => cache.findAll({ predicate: (query) => query.state.status === 'error' && isUnreachable(query.state.error) && query.getObserversCount() > 0 }).length > 0,
+  );
+  const retry = () => queryClient.refetchQueries({ type: 'active', predicate: (query) => query.state.status === 'error' });
   useEffect(() => {
-    let timer: number;
-    pushToast = (m) => {
-      setMsg(m);
-      clearTimeout(timer);
-      timer = setTimeout(() => setMsg(null), 2200);
-    };
-  }, []);
-  return msg ? (
-    <div className="toast" role="status">
-      {msg}
+    if (!isDown) return;
+    const timer = setInterval(retry, 15_000);
+    return () => clearInterval(timer);
+  }, [isDown]); // eslint-disable-line react-hooks/exhaustive-deps
+  if (!isDown) return null;
+  return (
+    <div className="fixed top-[72px] left-1/2 z-70 flex max-w-[calc(100vw-32px)] -translate-x-1/2 items-center gap-3 rounded-lg border border-primary bg-surface px-4 py-2.5 text-[13px]" role="alert">
+      {labels.offline}
+      <button className="link-btn" onClick={retry}>
+        {labels.retry}
+      </button>
     </div>
-  ) : null;
+  );
 }
 
 export function EChart({ option, height = 280 }: { option: echarts.EChartsCoreOption; height?: number }) {
-  const el = useRef<HTMLDivElement>(null);
+  const container = useRef<HTMLDivElement>(null);
   const chart = useRef<echarts.ECharts>(null);
   useEffect(() => {
-    const c = echarts.init(el.current!, null, { renderer: 'svg' });
-    chart.current = c;
-    const ro = new ResizeObserver(() => c.resize());
-    ro.observe(el.current!);
+    const instance = echarts.init(container.current!, null, { renderer: 'svg' });
+    chart.current = instance;
+    const resizeObserver = new ResizeObserver(() => instance.resize());
+    resizeObserver.observe(container.current!);
     return () => {
-      ro.disconnect();
-      c.dispose();
+      resizeObserver.disconnect();
+      instance.dispose();
     };
   }, []);
   useEffect(() => {
     chart.current?.setOption(option, true);
   }, [option]);
-  return <div ref={el} style={{ height, width: '100%' }} />;
+  return <div ref={container} style={{ height, width: '100%' }} />;
 }
 
-export const Skeleton = ({ h }: { h: number }) => <div className="skeleton" style={{ height: h }} />;
-
-export function downloadCsv(filename: string, rows: (string | number)[][]) {
-  const csv = rows.map((r) => r.map((c) => `"${String(c).replace(/"/g, '""')}"`).join(',')).join('\n');
-  const a = document.createElement('a');
-  a.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv' }));
-  a.download = filename;
-  a.click();
-  URL.revokeObjectURL(a.href);
-}
-
-export async function copyLink(msg: string) {
-  try {
-    await navigator.clipboard.writeText(location.href);
-    toast(msg);
-  } catch {
-    toast(location.href);
-  }
-}
+export const Skeleton = ({ height }: { height: number }) => <div className="skeleton" style={{ height }} />;

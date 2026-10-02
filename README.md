@@ -9,6 +9,7 @@ Data comes from the public MapBiomas Fogo Indonesia API (`https://fogo-id.geodat
 - React 19 + TypeScript, built with Vite
 - MapLibre GL (CARTO basemaps + Esri satellite) for the map
 - ECharts for charts, TanStack Query for data fetching, cmdk for the ⌘K search
+- Zustand for app state (kept in sync with the URL), Tailwind CSS v4 for styling
 - Oxlint for linting
 
 ## Features
@@ -26,6 +27,7 @@ Requires Node.js 22.12 or newer.
 
 ```bash
 npm install
+cp .env.example .env
 npm run dev       # http://localhost:5173
 ```
 
@@ -36,39 +38,51 @@ npm run dev       # http://localhost:5173
 | `npm run preview` | Serve the production build locally   |
 | `npm run lint`    | Run Oxlint                           |
 
-No environment variables are needed. The API base URL is set in `src/api.ts`.
+Configuration lives in `.env` (copy `.env.example`): the API address, the MapBiomas link and the basemap URLs, plus `DOMAIN` for production. The build stops with an error if a `VITE_*` value is missing. `VITE_*` values end up in the public JS, so never put secrets there.
 
 ## Project structure
 
 ```
 src/
-  main.tsx         entry: React Query provider + App
-  App.tsx          layout: header, map, stats sidebar
-  state.ts         URL-backed app state (territory, period, filters)
-  api.ts           API client and React Query hooks
-  MapView.tsx      MapLibre map, overlays, territory hover/click
-  MapControls.tsx  floating map controls, period slider, area-to-GIF tool
-  Stats.tsx        statistics cards
-  Palette.tsx      ⌘K territory search
-  inside.ts        finds thematic-layer features inside a territory (runs inside.worker.ts in a Web Worker)
-  Header.tsx, Breadcrumb.tsx, ui.tsx, i18n.ts, index.css
-public/            favicon and logos
+  main.tsx, App.tsx   entry and page layout
+  state.ts            Zustand stores: view state (synced with the URL) and preferences (theme, language)
+  i18n.ts             translations (en / id / pt) and number/month formatting
+  hooks.ts            theme, color tokens, click-outside
+  ui.tsx              shared components: Modal, Overlay, Toaster, ApiStatus, EChart, Skeleton
+  index.css           Tailwind setup, theme colors, the few styles utilities can't express
+  Header.tsx, Breadcrumb.tsx, Palette.tsx   top bar, breadcrumb, ⌘K search
+  api/
+    client.ts         fetch helper, cache settings, tile URLs
+    territory.ts      years, territories, search, bounds
+    stats.ts          area, time series, land cover, ranking, fire tiles, GIF
+    thematic.ts       which thematic layers have data in a territory
+    inside.ts + inside.worker.ts   finds a layer's features inside a territory (in a Web Worker)
+  map/
+    MapView.tsx       the MapLibre map, hover and click
+    overlay.ts        map layers: fire, heatmap, outline, sub-territories
+    MapControls.tsx   floating controls; uses Dropdown, TimeBar, AreaGif
+  stats/
+    Stats.tsx         sidebar with the four cards (Area, Series, Ranking, LandCover)
+  lib/                small helpers (tile math, CSV download, copy link)
+public/               favicon and logos
 ```
-
-## Deploy to Vercel
-
-1. Push this folder to GitHub (as the repo root, or as a subfolder of a larger repo).
-2. In Vercel, **Add New → Project** and import the repository.
-3. If `web/` is a subfolder, set **Root Directory** to `web`.
-4. Leave the defaults Vercel detects for Vite:
-   - Build command: `npm run build`
-   - Output directory: `dist`
-   - Install command: `npm install`
-5. Deploy. No environment variables are required.
-
-No `vercel.json` is needed: the app is a single page at `/` and keeps its state in the query string, so there are no client-side routes to rewrite.
 
 ## Notes
 
 - The API is third-party, unauthenticated and has no SLA. Earth Engine tile and GIF URLs expire after a few hours, so the app refetches them instead of caching them.
 - The GIF tool can take 10–20 seconds because Earth Engine renders the animation on request.
+
+## Production
+
+`compose.yml` runs the site behind Caddy, which serves `https://$DOMAIN` (a comma-separated list works too, e.g. `DOMAIN="fire.example.com, www.fire.example.com"`) and gets the certificates automatically. Point the domain's DNS at the server, then:
+
+```bash
+cp .env.example .env    # set DOMAIN and adjust the URLs
+docker compose up -d --build
+```
+
+The `Dockerfile` builds the site (config comes in as build args) and serves it from an unprivileged nginx on port 8080. Unknown paths fall back to `index.html` (all state is in the URL), `/assets` is cached for a year, and `/healthz` returns `ok`.
+
+CI (`.github/workflows/ci.yml`) lints and builds every push and pull request using `.env.example`. Each push to `main` then deploys over SSH: on the first run it clones the repo into `DEPLOY_PATH` (default `~/monthly-fire-indonesia`), afterwards it pulls, and it rebuilds with `docker compose up -d --build` using the server's own `.env`.
+
+Setup: on the server install Docker and git, add the SSH user to the `docker` group, open ports 80/443 and point DNS at it. On GitHub add the secrets `SSH_HOST`, `SSH_USER`, `SSH_KEY` (and `SSH_PASSPHRASE` if the key has one), optionally the variable `DEPLOY_PATH`. The first deploy stops after cloning because `.env` is missing: create it there (`cp .env.example .env`, set the `VITE_*` values and `DOMAIN`) and re-run the job.

@@ -4,115 +4,146 @@ import { CornerDownLeft, MapPin, Search, X } from 'lucide-react';
 import { useSearch, useTypeNames, type Territory } from './api';
 import { useI18n } from './i18n';
 import { selectTerritory } from './state';
+import { Overlay } from './ui';
 
-// Admin levels always get a chip (even at 0) so the hierarchy is visible; other types appear when they match.
-const ADMIN = ['province', 'regency', 'district', 'village'];
-// 2-letter queries can return ~9k rows; rendering them all as cmdk items freezes the page
-const CAP = 50;
-const CAP_ONE = 200;
+// Admin levels always get a filter chip (even with 0 results) so the hierarchy stays visible.
+const ADMIN_LEVELS = ['province', 'regency', 'district', 'village'];
+// Short searches can return ~9k rows; rendering all of them freezes the page.
+const MAX_ROWS_PER_GROUP = 50;
+const MAX_ROWS_SINGLE_GROUP = 200;
 
-/** Cmd+K territory search: type chips with counts, results grouped by type, keyboard-driven. */
+/** Cmd+K territory search: results grouped by type, with a chip per type to filter. */
 export function Palette({ onClose }: { onClose: () => void }) {
-  const { t, name } = useI18n();
-  const [q, setQ] = useState('');
-  const [only, setOnly] = useState<string | null>(null);
-  const { data: types = [] } = useTypeNames();
-  const [term, setTerm] = useState(''); // debounced q: one request per pause, not per keystroke
+  const { labels, name } = useI18n();
+  const [input, setInput] = useState('');
+  const [searchTerm, setSearchTerm] = useState('');
+  const [onlyType, setOnlyType] = useState<string | null>(null);
+  const { data: typeNames = [] } = useTypeNames();
+
+  // wait for a pause in typing before searching
   useEffect(() => {
-    const id = setTimeout(() => setTerm(q), 250);
-    return () => clearTimeout(id);
-  }, [q]);
-  const enabled = q.trim().length > 1;
-  const { data = [], isFetching } = useSearch(term);
-  const results = enabled ? data : [];
-  const loading = enabled && (isFetching || q !== term);
+    const timer = setTimeout(() => setSearchTerm(input), 250);
+    return () => clearTimeout(timer);
+  }, [input]);
 
-  // types in API hierarchy order (translations endpoint lists them country → region → … → thematic)
-  const order = types.map((x) => x.type);
-  const groups = new Map<string, Territory[]>();
-  for (const r of [...results].sort((a, b) => order.indexOf(a.type) - order.indexOf(b.type))) {
-    const g = groups.get(r.type);
-    if (g) g.push(r);
-    else groups.set(r.type, [r]);
+  const canSearch = input.trim().length > 1;
+  const { data = [], isFetching } = useSearch(searchTerm);
+  const results = canSearch ? data : [];
+  const isLoading = canSearch && (isFetching || input !== searchTerm);
+
+  // the API lists types in hierarchy order: country → region → … → thematic layers
+  const typeOrder = typeNames.map((item) => item.type);
+  const resultsByType = new Map<string, Territory[]>();
+  for (const result of [...results].sort((first, second) => typeOrder.indexOf(first.type) - typeOrder.indexOf(second.type))) {
+    const group = resultsByType.get(result.type);
+    if (group) group.push(result);
+    else resultsByType.set(result.type, [result]);
   }
-  const chips = order.filter((ty) => ADMIN.includes(ty) || groups.has(ty));
-  const typeName = (ty: string) => name(types.find((x) => x.type === ty)) || ty;
-  const shown = only ? [[only, groups.get(only) ?? []] as const] : [...groups];
-  const count = shown.reduce((n, [, rows]) => n + rows.length, 0);
+  const chipTypes = typeOrder.filter((type) => ADMIN_LEVELS.includes(type) || resultsByType.has(type));
+  const typeLabel = (type: string) => name(typeNames.find((item) => item.type === type)) || type;
+  const visibleGroups = onlyType ? [[onlyType, resultsByType.get(onlyType) ?? []] as const] : [...resultsByType];
+  const visibleCount = visibleGroups.reduce((total, [, rows]) => total + rows.length, 0);
+  const maxRows = onlyType ? MAX_ROWS_SINGLE_GROUP : MAX_ROWS_PER_GROUP;
 
-  const pick = (r: Territory) => {
-    selectTerritory(r.type, r.code);
+  const open = (territory: Territory) => {
+    selectTerritory(territory.type, territory.code);
     onClose();
   };
-  const chip = (label: string, n: number, type: string | null) => (
+
+  const chip = (label: string, count: number, type: string | null) => (
     <button
       key={label}
-      className="palette-chip"
-      aria-pressed={only === type}
-      onMouseDown={(e) => e.preventDefault()} // keep focus in the input
-      onClick={() => setOnly(type)}
+      className="group inline-flex flex-none items-center gap-2 rounded-full border bg-bg px-3.5 py-1.5 text-[13px] font-semibold text-fg aria-pressed:border-primary aria-pressed:bg-primary/14 aria-pressed:text-accent-text"
+      aria-pressed={onlyType === type}
+      onMouseDown={(event) => event.preventDefault()} // keep focus in the search input
+      onClick={() => setOnlyType(type)}
     >
-      {label} <span>{n}</span>
+      {label}
+      <span className="min-w-[22px] rounded-full bg-surface-2 px-1.5 text-center text-xs text-fg-2 group-aria-pressed:bg-primary/22 group-aria-pressed:text-accent-text">
+        {count}
+      </span>
     </button>
   );
 
   return (
-    <div className="overlay palette-overlay" onPointerDown={(e) => e.target === e.currentTarget && onClose()}>
+    <Overlay onClose={onClose} className="items-start justify-items-center px-4 pt-[10vh] pb-4 backdrop-blur-sm">
       <Command
-        key={only ?? ''} // remount on chip change so the first visible row is selected again
-        className="palette"
+        key={onlyType ?? ''} // remount when the filter changes so the first row is selected again
+        className="flex max-h-[80vh] w-[min(720px,100%)] flex-col overflow-hidden rounded-2xl border bg-bg shadow-[0_24px_64px_rgba(0,0,0,0.45)]"
         shouldFilter={false}
         loop
-        label={t.search}
-        onKeyDown={(e) => e.key === 'Escape' && (e.preventDefault(), onClose())}
+        label={labels.search}
+        onKeyDown={(event) => {
+          if (event.key === 'Escape') {
+            event.preventDefault();
+            onClose();
+          }
+        }}
       >
-        <div className="palette-input">
+        <div className="relative flex flex-none items-center gap-3 border-b py-3.5 pr-4 pl-5 text-muted">
           <Search size={20} />
-          <Command.Input autoFocus value={q} onValueChange={(v) => (setQ(v), setOnly(null))} placeholder={t.paletteHint} />
-          <button className="icon-btn" aria-label={t.close} onClick={onClose}>
+          <Command.Input
+            className="min-w-0 flex-1 bg-transparent text-[17px] text-fg outline-0 placeholder:text-muted"
+            autoFocus
+            value={input}
+            onValueChange={(value) => {
+              setInput(value);
+              setOnlyType(null);
+            }}
+            placeholder={labels.paletteHint}
+          />
+          <button className="icon-btn" aria-label={labels.close} onClick={onClose}>
             <X size={20} />
           </button>
-          {loading && <div className="loader-bar" />}
+          {isLoading && <div className="loader-bar top-auto -bottom-px" />}
         </div>
-        {enabled && (
-          <div className="palette-chips">
-            {chip(t.allGroups, results.length, null)}
-            {chips.map((ty) => chip(typeName(ty), groups.get(ty)?.length ?? 0, ty))}
+
+        {canSearch && (
+          <div className="flex flex-none flex-wrap gap-2 border-b bg-surface px-5 py-3">
+            {chip(labels.allGroups, results.length, null)}
+            {chipTypes.map((type) => chip(typeLabel(type), resultsByType.get(type)?.length ?? 0, type))}
           </div>
         )}
-        <Command.List className={`palette-list${loading && count ? ' busy' : ''}`}>
-          {!enabled && <div className="palette-empty">{t.typeToSearch}</div>}
-          {loading && !count && <Command.Loading className="palette-empty">{t.searching}</Command.Loading>}
-          {enabled && !loading && count === 0 && <div className="palette-empty">{t.noResults}</div>}
-          {shown.map(([ty, rows]) =>
+
+        <Command.List className={`palette-list flex-1 overflow-y-auto overscroll-contain ${isLoading && visibleCount ? 'opacity-45 transition-opacity' : ''}`}>
+          {!canSearch && <div className="px-5 py-7 text-center text-muted">{labels.typeToSearch}</div>}
+          {isLoading && !visibleCount && <Command.Loading className="px-5 py-7 text-center text-muted">{labels.searching}</Command.Loading>}
+          {canSearch && !isLoading && visibleCount === 0 && <div className="px-5 py-7 text-center text-muted">{labels.noResults}</div>}
+          {visibleGroups.map(([type, rows]) =>
             rows.length ? (
-              <Command.Group key={ty} heading={`${typeName(ty)} · ${rows.length}`}>
-                {rows.slice(0, only ? CAP_ONE : CAP).map((r) => (
-                  <Command.Item key={`${r.type}:${r.code}`} value={`${r.type}:${r.code}`} onSelect={() => pick(r)}>
-                    <MapPin size={18} className="palette-pin" />
-                    <span className="palette-name">{r.name}</span>
-                    {r.parentLabel && <small>{r.parentLabel}</small>}
-                    <CornerDownLeft size={16} className="palette-enter" />
+              <Command.Group key={type} heading={`${typeLabel(type)} · ${rows.length}`}>
+                {rows.slice(0, maxRows).map((territory) => (
+                  <Command.Item
+                    key={`${territory.type}:${territory.code}`}
+                    value={`${territory.type}:${territory.code}`}
+                    onSelect={() => open(territory)}
+                    className="group flex cursor-pointer items-center gap-3.5 px-5 py-3 text-[15px] text-fg data-[selected=true]:bg-primary/12"
+                  >
+                    <MapPin size={18} className="flex-none text-muted group-data-[selected=true]:text-accent-icon" />
+                    <span className="truncate">{territory.name}</span>
+                    {territory.parentLabel && <small className="text-xs text-muted">{territory.parentLabel}</small>}
+                    <CornerDownLeft size={16} className="invisible ml-auto flex-none text-accent-icon group-data-[selected=true]:visible" />
                   </Command.Item>
                 ))}
-                {rows.length > (only ? CAP_ONE : CAP) && (
-                  <div className="palette-more">
-                    +{rows.length - (only ? CAP_ONE : CAP)} · {t.refineSearch}
+                {rows.length > maxRows && (
+                  <div className="pt-2 pr-5 pb-3 pl-[52px] text-[13px] text-muted">
+                    +{rows.length - maxRows} · {labels.refineSearch}
                   </div>
                 )}
               </Command.Group>
             ) : null,
           )}
         </Command.List>
-        <div className="palette-foot">
-          <span>{t.paletteKeys}</span>
-          {enabled && (
+
+        <div className="flex flex-none justify-between gap-3 border-t bg-surface px-5 py-2.5 text-xs text-muted">
+          <span className="mobile:hidden">{labels.paletteKeys}</span>
+          {canSearch && (
             <span>
-              {count} {t.territories}
+              {visibleCount} {labels.territories}
             </span>
           )}
         </div>
       </Command>
-    </div>
+    </Overlay>
   );
 }

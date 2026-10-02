@@ -1,0 +1,68 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: cp .env.example .env
+      - run: npm run lint
+      - run: npm run build
+
+
+  # On main: SSH to the server, clone the repo there on first run (or pull), then rebuild with the server's .env.
+  # Settings → Secrets: SSH_HOST, SSH_USER, SSH_KEY (private key), SSH_PASSPHRASE (optional)
+  # Settings → Variables: DEPLOY_PATH (optional, default ~/monthly-fire-indonesia)
+  deploy:
+    needs: check
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    concurrency: deploy
+    steps:
+      - name: Check deploy secrets
+        env:
+          SSH_HOST: ${{ secrets.SSH_HOST }}
+          SSH_USER: ${{ secrets.SSH_USER }}
+          SSH_KEY: ${{ secrets.SSH_KEY }}
+        run: |
+          missing=0
+          for v in SSH_HOST SSH_USER SSH_KEY; do
+            [ -n "${!v}" ] || { echo "::error::Missing secret $v (Settings → Secrets and variables → Actions)"; missing=1; }
+          done
+          exit $missing
+      - uses: appleboy/ssh-action@0ff4204d59e8e51228ff73bce53f80d53301dee2  # v1.2.5
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USER }}
+          key: ${{ secrets.SSH_KEY }}
+          passphrase: ${{ secrets.SSH_PASSPHRASE }}
+          script: |
+            set -e
+            DIR="${{ vars.DEPLOY_PATH }}"
+            DIR="${DIR:-$HOME/monthly-fire-indonesia}"
+            if [ ! -d "$DIR/.git" ]; then
+              git clone ${{ github.server_url }}/${{ github.repository }}.git "$DIR"
+            fi
+            cd "$DIR"
+            git pull --ff-only origin main
+            if [ ! -f .env ]; then
+              echo "No .env in $DIR. Create it (cp .env.example .env, set VITE_* and DOMAIN), then re-run this job."
+              exit 1
+            fi
+            docker compose up -d --build --remove-orphans
+            docker image prune -f
