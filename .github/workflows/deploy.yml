@@ -24,7 +24,7 @@ concurrency:
   cancel-in-progress: false
 
 # Settings → Secrets: SSH_HOST, SSH_USER, SSH_KEY, SSH_PASSPHRASE (only if the key has one), SSH_KNOWN_HOSTS (optional)
-# Settings → Variables: DEPLOY_PATH (optional, default ~/monthly-fire-indonesia)
+# Settings → Variables or Secrets: DEPLOY_PATH (optional, default ~/monthly-fire-indonesia)
 jobs:
   deploy:
     runs-on: ubuntu-latest
@@ -37,7 +37,7 @@ jobs:
           SSH_HOST: ${{ secrets.SSH_HOST }}
           SSH_USER: ${{ secrets.SSH_USER }}
           SSH_KEY: ${{ secrets.SSH_KEY }}
-          DEPLOY_PATH: ${{ vars.DEPLOY_PATH }}
+          DEPLOY_PATH: ${{ vars.DEPLOY_PATH || secrets.DEPLOY_PATH }}
         run: |
           echo "$TAG" | grep -Eq '^[A-Za-z0-9._-]+$' || { echo "::error::Bad tag: '$TAG'"; exit 1; }
           [ -z "$DEPLOY_PATH" ] || echo "$DEPLOY_PATH" | grep -Eq '^[A-Za-z0-9._/~-]+$' || { echo "::error::Bad DEPLOY_PATH"; exit 1; }
@@ -88,7 +88,7 @@ jobs:
           HOST: ${{ secrets.SSH_HOST }}
           USER: ${{ secrets.SSH_USER }}
           TAG: ${{ inputs.tag }}
-          DEPLOY_PATH: ${{ vars.DEPLOY_PATH }}
+          DEPLOY_PATH: ${{ vars.DEPLOY_PATH || secrets.DEPLOY_PATH }}
           REPO: ${{ github.server_url }}/${{ github.repository }}.git
           GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
