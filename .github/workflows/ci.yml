@@ -11,40 +11,80 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  check:
+  # Skip everything when only docs changed (*.md, .gitignore)
+  changes:
     runs-on: ubuntu-latest
+    outputs:
+      web: ${{ steps.diff.outputs.web }}
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v5
         with:
-          node-version: 22
-          cache: npm
-      - run: npm ci
-      - run: cp .env.example .env
-      - run: npm run lint
-      - run: npm run build
-
-
-  # On main: SSH to the server, clone the repo there on first run (or pull), then rebuild with the server's .env.
-  # Settings → Secrets: SSH_HOST, SSH_USER, SSH_KEY (private key), SSH_PASSPHRASE (optional)
-  # Settings → Variables: DEPLOY_PATH (optional, default ~/monthly-fire-indonesia)
-  deploy:
-    needs: check
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-    runs-on: ubuntu-latest
-    concurrency: deploy
-    steps:
-      - name: Check deploy secrets
+          fetch-depth: 0
+      - id: diff
         env:
+          BASE: ${{ github.event.pull_request.base.sha || github.event.before }}
+        run: |
+          if [ -z "$BASE" ] || ! git cat-file -e "$BASE^{commit}" 2>/dev/null; then
+            web=true   # first push, manual run, or force push: check everything
+          elif git diff --name-only "$BASE" HEAD | grep -qvE '\.md$|^\.gitignore$'; then
+            web=true
+          else
+            web=false
+          fi
+          echo "web=$web" | tee -a "$GITHUB_OUTPUT"
+
+  # Deploy secrets must be set (Settings → Secrets and variables → Actions); fork PRs get no secrets, so skip them
+  secrets:
+    needs: changes
+    if: needs.changes.outputs.web == 'true' && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)
+    runs-on: ubuntu-latest
+    steps:
+      - env:
           SSH_HOST: ${{ secrets.SSH_HOST }}
           SSH_USER: ${{ secrets.SSH_USER }}
           SSH_KEY: ${{ secrets.SSH_KEY }}
         run: |
           missing=0
           for v in SSH_HOST SSH_USER SSH_KEY; do
-            [ -n "${!v}" ] || { echo "::error::Missing secret $v (Settings → Secrets and variables → Actions)"; missing=1; }
+            [ -n "${!v}" ] || { echo "::error::Missing secret $v"; missing=1; }
           done
           exit $missing
+
+  lint:
+    needs: changes
+    if: needs.changes.outputs.web == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run lint
+
+  build:
+    needs: lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: cp .env.example .env
+      - run: npm run build
+
+  # On main: SSH to the server, clone the repo there on first run (or pull), then rebuild with the server's .env.
+  # Settings → Secrets: SSH_HOST, SSH_USER, SSH_KEY (private key), SSH_PASSPHRASE (optional)
+  # Settings → Variables: DEPLOY_PATH (optional, default ~/monthly-fire-indonesia)
+  deploy:
+    needs: [secrets, build]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    concurrency: deploy
+    steps:
       - uses: appleboy/ssh-action@0ff4204d59e8e51228ff73bce53f80d53301dee2  # v1.2.5
         with:
           host: ${{ secrets.SSH_HOST }}
