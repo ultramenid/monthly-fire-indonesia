@@ -105,4 +105,6 @@ jobs:
               exit 1
             fi
             docker compose up -d --build --remove-orphans
-            docker image prune -f
+            # Remove unused images and build cache older than 1 day (the running image is in use, so it stays)
+            docker image prune -af --filter "until=24h"
+            docker builder prune -f --filter "until=24h"
