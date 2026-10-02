@@ -2,7 +2,7 @@ import { Fragment, useMemo, useState, type ReactNode } from 'react';
 import { ChevronLeft, ChevronRight, Download, Maximize2, PaintBucket, Share2 } from 'lucide-react';
 import { useArea, useGroupingOptions, useLandCoverClasses, useLandCoverStats, useRankingFor, useTimeSeries } from './api';
 import { useI18n } from './i18n';
-import { ADMIN_TYPES, defaultGrouping, selectTerritory, setState, type AppState } from './state';
+import { ADMIN_TYPES, selectTerritory, setState, type AppState } from './state';
 import { EChart, Modal, Skeleton, copyLink, downloadCsv, useTokens } from './ui';
 
 type CardProps = {
@@ -298,31 +298,6 @@ function RankingCard({ s, derived }: P) {
   );
 }
 
-/** Drives both the map's sub-territory layer and the ranking card. */
-/** Admin levels are reached by drilling, so the select only offers the drill default plus this area's thematic layers. */
-function GroupingSelect({ s, opts }: P & { opts: ReturnType<typeof useGroupingOptions> }) {
-  const { t, name } = useI18n();
-  const def = defaultGrouping(s.type);
-  const listed = [...opts.backed, ...opts.derived].filter((g) => g !== def);
-  if (s.grouping !== def && !listed.includes(s.grouping)) listed.push(s.grouping); // keep the current choice visible
-  const thematic = listed.sort((a, b) => Object.keys(opts.names).indexOf(a) - Object.keys(opts.names).indexOf(b));
-  return (
-    <label className="group-select">
-      {t.groupedBy}
-      <select value={s.grouping} disabled={!thematic.length && s.grouping === def} onChange={(e) => setState({ grouping: e.target.value })}>
-        <option value={def}>
-          {!ADMIN_TYPES.has(s.type) ? name(opts.names[def] as never) || def : opts.names[def] ? `${t.adminGroup} · ${name(opts.names[def] as never)}` : t.adminGroup}
-        </option>
-        {thematic.map((g) => (
-          <option key={g} value={g}>
-            {name(opts.names[g] as never) || g}
-          </option>
-        ))}
-      </select>
-    </label>
-  );
-}
-
 export function Stats({ s }: P) {
   const { t } = useI18n();
   const opts = useGroupingOptions(s.type, s.code, periodOf(s));
@@ -339,7 +314,6 @@ export function Stats({ s }: P) {
     <aside className="side">
       <div className="side-head">
         <h2>{t.statistics}</h2>
-        <GroupingSelect s={s} opts={opts} />
       </div>
       <AreaCard {...sum} />
       <SeriesCard {...sum} />

@@ -313,6 +313,11 @@ a {
 .pill.active {
   border-color: var(--primary);
 }
+.pill:focus-visible {
+  /* focus returns here after its menu closes; a ring looks like a stuck "active" state, so keep only a quiet border cue */
+  outline: none;
+  border-color: var(--border);
+}
 .ctrl {
   background: var(--bg);
 }
@@ -695,33 +700,6 @@ a {
   margin: 0;
   font-size: 16px;
   font-weight: 700;
-}
-.group-select {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  min-width: 0;
-  font-size: 12px;
-  color: var(--muted);
-  white-space: nowrap;
-}
-.group-select select {
-  height: 30px;
-  min-width: 0;
-  max-width: 180px;
-  padding: 0 8px;
-  border-radius: 100px;
-  border: 1px solid var(--border);
-  background: var(--surface);
-  color: var(--text-2);
-  font: inherit;
-  font-weight: 700;
-  cursor: pointer;
-}
-.group-select select:focus-visible {
-  /* Chrome shows a select's focus ring after mouse clicks too; keep a quiet border cue for keyboard users instead */
-  outline: none;
-  border-color: var(--muted);
 }
 .card {
   position: relative;

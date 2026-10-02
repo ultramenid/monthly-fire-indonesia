@@ -19,13 +19,13 @@ import {
   TextSearch,
   X,
 } from 'lucide-react';
-import { fetchGif, useMonths, useTerritoryLandCovers, useYears } from './api';
+import { fetchGif, useGroupingOptions, useMonths, useTerritoryLandCovers, useYears } from './api';
 import { useI18n } from './i18n';
-import { setState, type AppState } from './state';
+import { defaultGrouping, setState, type AppState } from './state';
 import { Modal, copyLink, useDismiss, useTheme } from './ui';
 
 type Props = { map: maplibregl.Map; s: AppState; bbox?: number[][]; drawing: RefObject<boolean> };
-type PopId = 'landcover' | 'basemap' | 'opacity' | 'area' | 'coords' | 'year' | null;
+type PopId = 'grouping' | 'landcover' | 'basemap' | 'opacity' | 'area' | 'coords' | 'year' | null;
 
 export function MapControls({ map, s, bbox, drawing }: Props) {
   const { t, name, month } = useI18n();
@@ -38,7 +38,7 @@ export function MapControls({ map, s, bbox, drawing }: Props) {
   const years = useYears().data ?? [];
   const months = useMonths(s.year).data ?? [];
 
-  const topRef = useDismiss<HTMLDivElement>(pop === 'landcover' || pop === 'basemap' || pop === 'opacity' || pop === 'area', close);
+  const topRef = useDismiss<HTMLDivElement>(pop === 'grouping' || pop === 'landcover' || pop === 'basemap' || pop === 'opacity' || pop === 'area', close);
   const rightRef = useDismiss<HTMLDivElement>(pop === 'coords', close);
   const yearRef = useDismiss<HTMLDivElement>(pop === 'year', close);
 
@@ -173,12 +173,43 @@ export function MapControls({ map, s, bbox, drawing }: Props) {
   const flyTo = (lat: number, lng: number) =>
     Number.isFinite(lat) && Number.isFinite(lng) && Math.abs(lat) <= 90 && Math.abs(lng) <= 180 && map.flyTo({ center: [lng, lat], zoom: Math.max(map.getZoom(), 9) });
 
+  // grouping: drives the map's sub-territory layer and the ranking. Offers every admin level below the territory
+  // (drilling still resets to the next one) and then this area's thematic layers.
+  const opts = useGroupingOptions(s.type, s.code, { year: s.year, monthStart: s.monthStart, monthEnd: s.monthEnd, landCover: s.landCover });
+  const below: string[] = [];
+  for (let g = s.type; defaultGrouping(g) !== g; g = defaultGrouping(g)) below.push(defaultGrouping(g));
+  const order = Object.keys(opts.names);
+  const thematic = [...opts.backed, ...opts.derived].sort((a, b) => order.indexOf(a) - order.indexOf(b));
+  // a thematic territory has no admin levels below it; it groups by itself
+  const groupings = [...new Set([...(below.length ? below : [s.type]), ...thematic, s.grouping])];
+  const groupName = (g: string) => name(opts.names[g] as never) || g;
+
   const lcLabel = s.landCover ? name(landCovers.find((l) => l.id === s.landCover)) : t.allLandCover;
 
   return (
     <>
       {/* ---------- top ---------- */}
       <div className="map-top" ref={topRef}>
+        <div style={{ position: 'relative' }}>
+          <button className="pill" aria-expanded={pop === 'grouping'} disabled={groupings.length < 2} onClick={() => toggle('grouping')}>
+            {t.groupedBy} {groupName(s.grouping)} {groupings.length > 1 && <ChevronDown size={16} />}
+          </button>
+          {pop === 'grouping' && (
+            <div className="pop menu" style={{ top: 42, left: 0, minWidth: '100%' }} role="menu">
+              {groupings.map((g) => (
+                <button
+                  key={g}
+                  className="menu-item"
+                  role="menuitemradio"
+                  aria-checked={g === s.grouping}
+                  onClick={() => (setState({ grouping: g }), close())}
+                >
+                  {groupName(g)} {g === s.grouping && <Check size={16} />}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
         <div style={{ position: 'relative' }}>
           <button className={`pill${s.landCover ? ' active' : ''}`} aria-expanded={pop === 'landcover'} onClick={() => toggle('landcover')}>
             {t.showing} {lcLabel} <ChevronDown size={16} />
