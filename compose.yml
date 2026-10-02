@@ -1,16 +1,12 @@
-# Production: `cp .env.example .env`, set DOMAIN (DNS pointing here), then `docker compose up -d --build`.
-# All settings (VITE_* and DOMAIN) come from this .env; rebuild after changing any of them.
+# Production: CI builds a config-free image and deploy/remote-deploy.sh runs it here with WEB_TAG=sha-<commit>.
+# All settings come from this server's .env (VITE_* are served to the browser as /config.js; WEB_TAG is written by the deploy).
+# Local: `docker compose up -d --build`.
 # Caddy serves https://$DOMAIN (comma-separated list allowed) with an automatic certificate and proxies to the site.
 services:
   web:
-    build:
-      context: .
-      args:
-        VITE_API_URL: ${VITE_API_URL:?set in .env}
-        VITE_MAPBIOMAS_URL: ${VITE_MAPBIOMAS_URL:?set in .env}
-        VITE_BASEMAP_DARK: ${VITE_BASEMAP_DARK:?set in .env}
-        VITE_BASEMAP_LIGHT: ${VITE_BASEMAP_LIGHT:?set in .env}
-        VITE_BASEMAP_SATELLITE: ${VITE_BASEMAP_SATELLITE:?set in .env}
+    image: ghcr.io/ultramenid/monthly-fire-indonesia:${WEB_TAG:-latest}
+    build: .
+    env_file: .env
     restart: unless-stopped
 
   caddy:

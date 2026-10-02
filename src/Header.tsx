@@ -1,13 +1,14 @@
 import { useEffect, useState } from 'react';
 import { ArrowRight, Code2, EllipsisVertical, Languages, Moon, Search, Sun, X } from 'lucide-react';
 import { API } from './api';
+import { config } from './config';
 import { LANGS, useI18n } from './i18n';
 import { Palette } from './Palette';
 import { useDismiss, useTheme } from './hooks';
 import { Overlay } from './ui';
 
 const API_DOCS_URL = `${API}/docs/`;
-const MAPBIOMAS_URL = import.meta.env.VITE_MAPBIOMAS_URL;
+const MAPBIOMAS_URL = config.VITE_MAPBIOMAS_URL;
 
 const navButton = 'inline-flex h-8 items-center gap-2 rounded-lg px-3 font-bold text-accent-text no-underline hover:bg-chip';
 const drawerLink = 'flex w-full items-center justify-between px-4 py-2.5 text-left text-base font-bold text-fg-2 no-underline';

@@ -3,6 +3,7 @@ import type { ExpressionSpecification, FilterSpecification, StyleSpecification }
 import workerUrl from 'maplibre-gl/dist/maplibre-gl-worker.mjs?worker&url';
 import { groupingTilesUrl, shapeTilesUrl } from '../api';
 import type { AppState } from '../state';
+import { config } from '../config';
 
 maplibregl.setWorkerUrl(workerUrl);
 
@@ -24,14 +25,14 @@ maplibregl.addProtocol('retry', async ({ url }, abortController) => {
 });
 
 export const STYLES: Record<string, string | StyleSpecification> = {
-  dark: import.meta.env.VITE_BASEMAP_DARK,
-  light: import.meta.env.VITE_BASEMAP_LIGHT,
+  dark: config.VITE_BASEMAP_DARK,
+  light: config.VITE_BASEMAP_LIGHT,
   satellite: {
     version: 8,
     sources: {
       sat: {
         type: 'raster',
-        tiles: [import.meta.env.VITE_BASEMAP_SATELLITE],
+        tiles: [config.VITE_BASEMAP_SATELLITE],
         tileSize: 256,
         maxzoom: 18,
         attribution: 'Esri, Maxar, Earthstar Geographics',

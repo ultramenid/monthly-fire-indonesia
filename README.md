@@ -38,7 +38,7 @@ npm run dev       # http://localhost:5173
 | `npm run preview` | Serve the production build locally   |
 | `npm run lint`    | Run Oxlint                           |
 
-Configuration lives in `.env` (copy `.env.example`): the API address, the MapBiomas link and the basemap URLs, plus `DOMAIN` for production. The build stops with an error if a `VITE_*` value is missing. `VITE_*` values end up in the public JS, so never put secrets there.
+Configuration lives in `.env` (copy `.env.example`): the API address, the MapBiomas link and the basemap URLs, plus `DOMAIN` for production. `npm run dev` stops with an error if a `VITE_*` value is missing. The production build is config-free: nginx serves `/config.js` from the container's environment (the server `.env`), and `src/config.ts` reads it. `VITE_*` values reach the browser, so never put secrets there.
 
 ## Project structure
 
@@ -74,15 +74,26 @@ public/               favicon and logos
 
 ## Production
 
-`compose.yml` runs the site behind Caddy, which serves `https://$DOMAIN` (a comma-separated list works too, e.g. `DOMAIN="fire.example.com, www.fire.example.com"`) and gets the certificates automatically. Point the domain's DNS at the server, then:
+`compose.yml` runs the site behind Caddy, which serves `https://$DOMAIN` (a comma-separated list works too, e.g. `DOMAIN="fire.example.com, www.fire.example.com"`) and gets the certificates automatically. The `Dockerfile` builds the site without any config and serves it from an unprivileged nginx on port 8080. Unknown paths fall back to `index.html` (all state is in the URL), `/assets` is cached for a year, and `/healthz` returns `ok`.
 
-```bash
-cp .env.example .env    # set DOMAIN and adjust the URLs
-docker compose up -d --build
-```
+Run it locally the same way: `cp .env.example .env`, then `docker compose up -d --build`.
 
-The `Dockerfile` builds the site (config comes in as build args) and serves it from an unprivileged nginx on port 8080. Unknown paths fall back to `index.html` (all state is in the URL), `/assets` is cached for a year, and `/healthz` returns `ok`.
+### CI/CD
 
-CI (`.github/workflows/ci.yml`) lints and builds every push and pull request using `.env.example`. Each push to `main` then deploys over SSH: on the first run it clones the repo into `DEPLOY_PATH` (default `~/monthly-fire-indonesia`), afterwards it pulls, and it rebuilds with `docker compose up -d --build` using the server's own `.env`.
+| Workflow | When | What |
+|---|---|---|
+| `ci.yml` | PRs, pushes to other branches, called by `release.yml` | `changes` (skip if only docs changed) → `test-web` (lint + build); `secrets` (gitleaks scan for leaked credentials) |
+| `release.yml` | push to `main` | `changes` (diff since tag `deployed/prod`) → `ci` → `build-web` (image to `ghcr.io/ultramenid/monthly-fire-indonesia:sha-<commit>` + `latest`) → `deploy-prod` → `tag-deployed-prod` |
+| `deploy.yml` | called by `release.yml`, or run by hand to roll back | SSH (host key pinned if `SSH_KNOWN_HOSTS` is set), then `deploy/remote-deploy.sh <tag>` on the server |
 
-Setup: on the server install Docker and git, add the SSH user to the `docker` group, open ports 80/443 and point DNS at it. On GitHub add the secrets `SSH_HOST`, `SSH_USER`, `SSH_KEY` (and `SSH_PASSPHRASE` if the key has one), optionally the variable `DEPLOY_PATH`. The first deploy stops after cloning because `.env` is missing: create it there (`cp .env.example .env`, set the `VITE_*` values and `DOMAIN`) and re-run the job.
+On the server, `deploy/remote-deploy.sh` (from the checkout just reset to `origin/main`) writes `WEB_TAG` into `.env`, pulls and starts the image, waits until it is healthy and serves the app, and otherwise rolls back to the previous tag. After a good deploy it removes unused images and build cache older than 1 day.
+
+**Rollback:** Actions → Deploy → Run workflow → tag `sha-<older commit>`.
+
+**Setup once**
+
+1. Server: install Docker (with compose) and git, add the SSH user to the `docker` group, open ports 80/443, point each domain's DNS at it.
+2. GitHub → Settings → Secrets and variables → Actions → Secrets: `SSH_HOST`, `SSH_USER`, `SSH_KEY` (private key), and `SSH_PASSPHRASE` only if the key has one. Optional:
+   - `SSH_KNOWN_HOSTS` pins the server's host key (output of `ssh-keyscan <SSH_HOST>` from a trusted machine, same name/IP as `SSH_HOST`). Without it the deploy trusts the key the server shows when it connects.
+   - Variable `DEPLOY_PATH` changes the server folder (default `~/monthly-fire-indonesia`).
+3. Push to `main`. The first deploy clones the repo on the server and stops because `.env` is missing: create it there (`cp .env.example .env`, set `DOMAIN` and check the `VITE_*` values) and re-run the failed job. Later changes to `.env` apply on the next deploy or `docker compose up -d`; no rebuild needed.

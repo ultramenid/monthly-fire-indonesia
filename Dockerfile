@@ -4,12 +4,13 @@ WORKDIR /app
 COPY package.json package-lock.json ./
 RUN npm ci
 COPY . .
-# .env is not copied (see .dockerignore); config comes in as build args, see .env.example
-ARG VITE_API_URL VITE_MAPBIOMAS_URL VITE_BASEMAP_DARK VITE_BASEMAP_LIGHT VITE_BASEMAP_SATELLITE
+# Config-free build: .env is not copied (see .dockerignore); VITE_* come in at runtime via /config.js
 RUN npm run build
 
 FROM nginxinc/nginx-unprivileged:1.29-alpine
-COPY nginx.conf /etc/nginx/conf.d/default.conf
+# Rendered to conf.d at start by the image's envsubst step; only VITE_* are substituted, nginx's own $vars stay
+ENV NGINX_ENVSUBST_FILTER=^VITE_
+COPY nginx.conf /etc/nginx/templates/default.conf.template
 COPY --from=build /app/dist /usr/share/nginx/html
 EXPOSE 8080
 HEALTHCHECK --interval=30s --timeout=3s CMD wget -qO- http://127.0.0.1:8080/healthz || exit 1

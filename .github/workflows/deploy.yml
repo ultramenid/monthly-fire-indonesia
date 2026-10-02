@@ -1,0 +1,103 @@
+name: Deploy
+
+on:
+  workflow_call:
+    inputs:
+      tag:
+        type: string
+        required: true
+  # Rollback: run manually (Actions → Deploy → Run workflow) with an older tag, e.g. sha-<previous commit>.
+  workflow_dispatch:
+    inputs:
+      tag:
+        type: string
+        required: true
+        description: 'Image tag to run, e.g. sha-<full commit sha> or latest'
+
+permissions:
+  contents: read
+  packages: read
+
+# One server: deploys queue, never overlap, never cancel halfway.
+concurrency:
+  group: deploy-prod
+  cancel-in-progress: false
+
+# Settings → Secrets: SSH_HOST, SSH_USER, SSH_KEY, SSH_PASSPHRASE (only if the key has one), SSH_KNOWN_HOSTS (optional)
+# Settings → Variables: DEPLOY_PATH (optional, default ~/monthly-fire-indonesia)
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      # Fail closed: the tag ends up in a remote shell command, and dispatch input is untrusted.
+      - name: Validate input and secrets
+        env:
+          TAG: ${{ inputs.tag }}
+          SSH_HOST: ${{ secrets.SSH_HOST }}
+          SSH_USER: ${{ secrets.SSH_USER }}
+          SSH_KEY: ${{ secrets.SSH_KEY }}
+          DEPLOY_PATH: ${{ vars.DEPLOY_PATH }}
+        run: |
+          echo "$TAG" | grep -Eq '^[A-Za-z0-9._-]+$' || { echo "::error::Bad tag: '$TAG'"; exit 1; }
+          [ -z "$DEPLOY_PATH" ] || echo "$DEPLOY_PATH" | grep -Eq '^[A-Za-z0-9._/~-]+$' || { echo "::error::Bad DEPLOY_PATH"; exit 1; }
+          missing=0
+          for v in SSH_HOST SSH_USER SSH_KEY; do
+            [ -n "${!v}" ] || { echo "::error::Missing secret $v"; missing=1; }
+          done
+          exit $missing
+
+      - name: Write SSH key and known_hosts
+        env:
+          SSH_KEY: ${{ secrets.SSH_KEY }}
+          KNOWN_HOSTS: ${{ secrets.SSH_KNOWN_HOSTS }}
+          HOST: ${{ secrets.SSH_HOST }}
+        run: |
+          mkdir -p ~/.ssh && chmod 700 ~/.ssh
+          printf '%s\n' "$SSH_KEY" > ~/.ssh/deploy_key && chmod 600 ~/.ssh/deploy_key
+          if [ -n "$KNOWN_HOSTS" ]; then
+            # Pinned host key: refuse a server that answers with any other key.
+            printf '%s\n' "$KNOWN_HOSTS" > ~/.ssh/known_hosts
+            ssh-keygen -F "$HOST" -f ~/.ssh/known_hosts >/dev/null \
+              || { echo "::error::SSH_KNOWN_HOSTS has no entry for SSH_HOST (use the same name/IP in both)"; exit 1; }
+            echo "SSH_HOSTKEY_OPT=StrictHostKeyChecking=yes" >> "$GITHUB_ENV"
+          else
+            # ponytail: no SSH_KNOWN_HOSTS secret → trust the key the server shows on this connect
+            # (same as the previous ssh-action setup). Add SSH_KNOWN_HOSTS to pin it.
+            echo "SSH_HOSTKEY_OPT=StrictHostKeyChecking=accept-new" >> "$GITHUB_ENV"
+          fi
+
+      - name: Load key into ssh-agent (passphrase supported)
+        env:
+          PASSPHRASE: ${{ secrets.SSH_PASSPHRASE }}
+        run: |
+          eval "$(ssh-agent -s)"
+          if [ -n "$PASSPHRASE" ]; then
+            # shellcheck disable=SC2016 # $PASSPHRASE must expand when askpass runs, not now
+            printf '#!/bin/sh\nprintf "%%s" "$PASSPHRASE"\n' > ~/.ssh/askpass.sh && chmod 700 ~/.ssh/askpass.sh
+            SSH_ASKPASS=~/.ssh/askpass.sh SSH_ASKPASS_REQUIRE=force ssh-add ~/.ssh/deploy_key </dev/null \
+              || { echo "::error::ssh-add failed: SSH_PASSPHRASE does not match SSH_KEY"; exit 1; }
+          else
+            ssh-add ~/.ssh/deploy_key </dev/null \
+              || { echo "::error::ssh-add failed: the key may be encrypted but SSH_PASSPHRASE is not set"; exit 1; }
+          fi
+          echo "SSH_AUTH_SOCK=$SSH_AUTH_SOCK" >> "$GITHUB_ENV"
+
+      - name: Deploy via SSH
+        env:
+          HOST: ${{ secrets.SSH_HOST }}
+          USER: ${{ secrets.SSH_USER }}
+          TAG: ${{ inputs.tag }}
+          DEPLOY_PATH: ${{ vars.DEPLOY_PATH }}
+          REPO: ${{ github.server_url }}/${{ github.repository }}.git
+          GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          SSH="ssh -o BatchMode=yes -o $SSH_HOSTKEY_OPT -o ConnectTimeout=30 -o ServerAliveInterval=15 -o ServerAliveCountMax=4 $USER@$HOST"
+          # Registry login for a private image; the token goes over stdin and expires when this job ends.
+          echo "$GHCR_TOKEN" | $SSH "docker login ghcr.io -u $GITHUB_ACTOR --password-stdin" >/dev/null
+          # The server runs the deploy script from its own checkout, reset to main: deploy logic is versioned with the code.
+          $SSH "set -e; export GIT_TERMINAL_PROMPT=0
+            DIR=${DEPLOY_PATH:-\$HOME/monthly-fire-indonesia}
+            [ -d \"\$DIR/.git\" ] || git clone $REPO \"\$DIR\"
+            cd \"\$DIR\" && git fetch origin main && git reset --hard origin/main
+            ./deploy/remote-deploy.sh '$TAG'"

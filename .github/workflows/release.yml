@@ -1,0 +1,95 @@
+name: Release
+
+on:
+  push:
+    branches: [main]
+
+# Queue, never cancel: builds and deploys run one after another.
+concurrency:
+  group: release-main
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  changes:
+    runs-on: ubuntu-latest
+    outputs:
+      web: ${{ steps.filter.outputs.web }}
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+      - run: git fetch --quiet --tags --force origin
+      - id: filter
+        env:
+          BEFORE: ${{ github.event.before }}
+        run: |
+          web() { echo "web=$1" | tee -a "$GITHUB_OUTPUT"; }
+          # Diff against the last commit that reached production (tag deployed/prod), so a red run's
+          # changes are picked up by the next green one. Falls back to the previous push.
+          if git cat-file -e 'refs/tags/deployed/prod^{commit}' 2>/dev/null; then BASE=refs/tags/deployed/prod; else BASE="$BEFORE"; fi
+          MERGE="$(git merge-base HEAD "$BASE" 2>/dev/null || true)"
+          [ -n "$MERGE" ] || { web true; exit 0; }
+          DIFF="$(git diff --name-only "$MERGE" HEAD)"
+          if echo "$DIFF" | grep -qE '^(src/|public/|index\.html|package(-lock)?\.json|tsconfig|vite\.config\.ts|Dockerfile|nginx\.conf|compose\.yml|Caddyfile|deploy/|\.github/)'; then
+            web true
+          else
+            web false
+          fi
+
+  ci:
+    needs: changes
+    uses: ./.github/workflows/ci.yml
+
+  build-web:
+    needs: [ci, changes]
+    if: needs.changes.outputs.web == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ghcr.io/${{ github.repository }}
+          tags: |
+            type=raw,value=latest
+            type=sha,format=long
+            type=sha
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  deploy-prod:
+    needs: [changes, build-web]
+    if: needs.build-web.result == 'success'
+    uses: ./.github/workflows/deploy.yml
+    secrets: inherit
+    with:
+      tag: sha-${{ github.sha }}
+
+  # Move the diff base only after a successful deploy.
+  tag-deployed-prod:
+    needs: deploy-prod
+    if: needs.deploy-prod.result == 'success'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v5
+      - run: |
+          git tag -f deployed/prod "$GITHUB_SHA"
+          git push --force origin refs/tags/deployed/prod

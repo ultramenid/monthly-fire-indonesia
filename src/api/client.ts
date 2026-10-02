@@ -1,6 +1,7 @@
 import { keepPreviousData } from '@tanstack/react-query';
+import { config } from '../config';
 
-export const API = import.meta.env.VITE_API_URL;
+export const API = config.VITE_API_URL;
 
 export type Names = { namePt: string; nameId: string; nameEn: string };
 export type Period = { year: number; monthStart: number; monthEnd: number; landCover?: number };
