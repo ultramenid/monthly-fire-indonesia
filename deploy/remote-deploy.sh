@@ -1,13 +1,11 @@
 #!/usr/bin/env bash
-# Runs ON THE SERVER, called by .github/workflows/deploy.yml: remote-deploy.sh <image tag> [domain for a new .env]
+# Runs ON THE SERVER, called by .github/workflows/deploy.yml: remote-deploy.sh <image tag>
 # It comes from the checkout that was just reset to origin/main, so deploy logic is versioned with the code.
 # Pulls the image, waits until it is healthy and serves the page, otherwise rolls back to the previous tag.
 set -euo pipefail
 
-TAG="${1:?usage: remote-deploy.sh <image tag> [domain]}"
-NEW_DOMAIN="${2:-}"
+TAG="${1:?usage: remote-deploy.sh <image tag>}"
 [[ "$TAG" =~ ^[A-Za-z0-9._-]+$ ]] || { echo "bad tag: $TAG" >&2; exit 1; }
-[[ "$NEW_DOMAIN" =~ ^[A-Za-z0-9.:,\ -]*$ ]] || { echo "bad domain: $NEW_DOMAIN" >&2; exit 1; }
 
 STACK_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 ENV_FILE="$STACK_DIR/.env"
@@ -19,22 +17,13 @@ log() { printf '[deploy] %s\n' "$*"; }
 die() { printf '[deploy] ERROR: %s\n' "$*" >&2; exit 1; }
 compose() { docker compose --project-directory "$STACK_DIR" "$@"; }
 
-PLACEHOLDER_DOMAIN="fire.example.com"
 if [ ! -f "$ENV_FILE" ]; then
   cp "$STACK_DIR/.env.example" "$ENV_FILE"
-  [ -z "$NEW_DOMAIN" ] || sed -i.bak "s|^DOMAIN=.*|DOMAIN=\"$NEW_DOMAIN\"|" "$ENV_FILE" && rm -f "$ENV_FILE.bak"
   log "created $ENV_FILE from .env.example"
 fi
 if [ ! -w "$ENV_FILE" ]; then
   # e.g. created as root: hand it back to the deploy user (needs passwordless sudo)
   sudo -n chown "$(id -un):$(id -gn)" "$ENV_FILE" || die "$ENV_FILE is not writable by $(id -un): sudo chown $(id -un): $ENV_FILE"
-fi
-caddy_on() { grep -Eq '^COMPOSE_PROFILES=.*caddy' "$ENV_FILE"; }
-# DOMAIN only matters when Caddy serves the site; behind the host's nginx the domains live in the nginx config.
-if caddy_on; then
-  grep -q "^DOMAIN=\"\?$PLACEHOLDER_DOMAIN" "$ENV_FILE" \
-    && die "set DOMAIN in $ENV_FILE (still $PLACEHOLDER_DOMAIN), or add a DOMAIN secret/variable before the first deploy"
-  grep -Eq "^DOMAIN=.+" "$ENV_FILE" || die "DOMAIN is missing or empty in $ENV_FILE"
 fi
 for key in VITE_API_URL VITE_MAPBIOMAS_URL VITE_BASEMAP_DARK VITE_BASEMAP_LIGHT VITE_BASEMAP_SATELLITE; do
   grep -Eq "^$key=.+" "$ENV_FILE" || die "$key is missing or empty in $ENV_FILE (see .env.example)"
@@ -62,7 +51,7 @@ wait_healthy() {
 
 diagnostics() {
   compose ps || true
-  compose logs --tail 40 web caddy || true
+  compose logs --tail 40 web || true
 }
 
 cp "$ENV_FILE" "$ENV_ROLLBACK"
@@ -70,8 +59,6 @@ set_tag "$TAG"
 
 log "pull + up (WEB_TAG=$TAG)"
 compose pull web || { mv "$ENV_ROLLBACK" "$ENV_FILE"; die "could not pull image $TAG"; }
-# Caddy turned off (or never able to start): remove its container so it doesn't linger
-caddy_on || compose --profile caddy rm -sf caddy >/dev/null 2>&1 || true
 compose up -d --no-build --remove-orphans
 
 if wait_healthy; then

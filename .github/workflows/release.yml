@@ -34,7 +34,7 @@ jobs:
           MERGE="$(git merge-base HEAD "$BASE" 2>/dev/null || true)"
           [ -n "$MERGE" ] || { web true; exit 0; }
           DIFF="$(git diff --name-only "$MERGE" HEAD)"
-          if echo "$DIFF" | grep -qE '^(src/|public/|index\.html|package(-lock)?\.json|tsconfig|vite\.config\.ts|Dockerfile|nginx\.conf|compose\.yml|Caddyfile|deploy/|\.github/)'; then
+          if echo "$DIFF" | grep -qE '^(src/|public/|index\.html|package(-lock)?\.json|tsconfig|vite\.config\.ts|Dockerfile|nginx\.conf|compose\.yml|deploy/|\.github/)'; then
             web true
           else
             web false

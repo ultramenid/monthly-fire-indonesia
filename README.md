@@ -38,7 +38,7 @@ npm run dev       # http://localhost:5173
 | `npm run preview` | Serve the production build locally   |
 | `npm run lint`    | Run Oxlint                           |
 
-Configuration lives in `.env` (copy `.env.example`): the API address, the MapBiomas link and the basemap URLs, plus `DOMAIN` for production. `npm run dev` stops with an error if a `VITE_*` value is missing. The production build is config-free: nginx serves `/config.js` from the container's environment (the server `.env`), and `src/config.ts` reads it. `VITE_*` values reach the browser, so never put secrets there.
+Configuration lives in `.env` (copy `.env.example`): the API address, the MapBiomas link and the basemap URLs. `npm run dev` stops with an error if a `VITE_*` value is missing. The production build is config-free: nginx serves `/config.js` from the container's environment (the server `.env`), and `src/config.ts` reads it. `VITE_*` values reach the browser, so never put secrets there.
 
 ## Project structure
 
@@ -76,24 +76,19 @@ public/               favicon and logos
 
 The `Dockerfile` builds the site without any config and serves it from an unprivileged nginx on port 8080. Unknown paths fall back to `index.html` (all state is in the URL), `/assets` is cached for a year, `/config.js` carries the `VITE_*` values from `.env`, and `/healthz` returns `ok`.
 
-`compose.yml` publishes the site on `127.0.0.1:$WEB_PORT` (default 3001) only, so the server's own nginx serves the domains, the same way as fire-buminusantara. One-time nginx site, e.g. `/etc/nginx/sites-available/monthly-fire`:
+`compose.yml` publishes the site on `127.0.0.1:$WEB_PORT` (default 3001) only, so the server's own nginx serves the domains, the same way as fire-buminusantara. The site config is in [`deploy/monthly-fire.conf`](deploy/monthly-fire.conf) (same pattern: webroot ACME + redirect on 80, TLS on 443) for `kobong.nusantara.earth` and `platform.fire.monthly.mapbiomas.id`, with both domains' DNS pointing at the server. One-time install:
 
-```nginx
-server {
-  listen 80;
-  server_name fire.example.com www.fire.example.com;   # as many domains as you like
-  location / {
-    proxy_pass http://127.0.0.1:3001;
-    proxy_set_header Host $host;
-    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-    proxy_set_header X-Forwarded-Proto $scheme;
-  }
-}
+```bash
+sudo cp deploy/monthly-fire.conf /etc/nginx/sites-available/monthly-fire
+# The 443 block needs the cert first: comment it out (leave the 80 block in), then:
+sudo ln -s /etc/nginx/sites-available/monthly-fire /etc/nginx/sites-enabled/
+sudo nginx -t && sudo systemctl reload nginx
+# Cert via the same webroot as fire-buminusantara, then restore the 443 block and reload again.
+# One cert covers both names (SAN): the -d order names the cert after the first domain.
+sudo certbot certonly --webroot -w /var/www/html -d kobong.nusantara.earth -d platform.fire.monthly.mapbiomas.id
 ```
 
-Then `sudo ln -s /etc/nginx/sites-available/monthly-fire /etc/nginx/sites-enabled/ && sudo nginx -t && sudo systemctl reload nginx`, and HTTPS with `sudo certbot --nginx -d fire.example.com -d www.fire.example.com`.
-
-No web server on the box? Set `COMPOSE_PROFILES=caddy` and `DOMAIN="a.com, www.a.com"` in `.env`: Caddy then takes ports 80/443 and gets the certificates itself. Locally: `cp .env.example .env`, then `docker compose up -d --build`.
+Renewals run from certbot's own timer; the 80 block serves the challenge.
 
 ### CI/CD
 

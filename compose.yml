@@ -1,9 +1,7 @@
 # Production: CI builds a config-free image and deploy/remote-deploy.sh runs it here with WEB_TAG=sha-<commit>.
 # All settings come from this server's .env (VITE_* are served to the browser as /config.js; WEB_TAG is written by the deploy).
 # Local: `docker compose up -d --build`.
-# The site listens on 127.0.0.1:$WEB_PORT only: put the host's nginx in front of it (see README).
-# Server without a web server of its own? Set COMPOSE_PROFILES=caddy in .env: Caddy then serves https://$DOMAIN
-# (comma-separated list allowed) on ports 80/443 with automatic certificates.
+# The site listens on 127.0.0.1:$WEB_PORT only: the host's nginx serves the domains (site: deploy/monthly-fire.conf).
 services:
   web:
     image: ghcr.io/ultramenid/monthly-fire-indonesia:${WEB_TAG:-latest}
@@ -12,21 +10,3 @@ services:
     ports:
       - "127.0.0.1:${WEB_PORT:-3001}:8080"
     restart: unless-stopped
-
-  caddy:
-    profiles: [caddy]
-    image: caddy:2-alpine
-    environment:
-      DOMAIN: ${DOMAIN:-}
-    ports:
-      - "80:80"
-      - "443:443"
-    volumes:
-      - ./Caddyfile:/etc/caddy/Caddyfile:ro
-      - caddy_data:/data
-    depends_on:
-      - web
-    restart: unless-stopped
-
-volumes:
-  caddy_data:
