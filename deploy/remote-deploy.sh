@@ -1,11 +1,13 @@
 #!/usr/bin/env bash
-# Runs ON THE SERVER, called by .github/workflows/deploy.yml: remote-deploy.sh <image tag>
+# Runs ON THE SERVER, called by .github/workflows/deploy.yml: remote-deploy.sh <image tag> [domain for a new .env]
 # It comes from the checkout that was just reset to origin/main, so deploy logic is versioned with the code.
 # Pulls the image, waits until it is healthy and serves the page, otherwise rolls back to the previous tag.
 set -euo pipefail
 
-TAG="${1:?usage: remote-deploy.sh <image tag>}"
+TAG="${1:?usage: remote-deploy.sh <image tag> [domain]}"
+NEW_DOMAIN="${2:-}"
 [[ "$TAG" =~ ^[A-Za-z0-9._-]+$ ]] || { echo "bad tag: $TAG" >&2; exit 1; }
+[[ "$NEW_DOMAIN" =~ ^[A-Za-z0-9.:,\ -]*$ ]] || { echo "bad domain: $NEW_DOMAIN" >&2; exit 1; }
 
 STACK_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 ENV_FILE="$STACK_DIR/.env"
@@ -17,8 +19,18 @@ log() { printf '[deploy] %s\n' "$*"; }
 die() { printf '[deploy] ERROR: %s\n' "$*" >&2; exit 1; }
 compose() { docker compose --project-directory "$STACK_DIR" "$@"; }
 
-[ -f "$ENV_FILE" ] || die "no $ENV_FILE yet: cp .env.example .env, set DOMAIN, then re-run the deploy"
-[ -w "$ENV_FILE" ] || die "$ENV_FILE is not writable by $(id -un) (the deploy writes WEB_TAG there): sudo chown $(id -un): $ENV_FILE"
+PLACEHOLDER_DOMAIN="fire.example.com"
+if [ ! -f "$ENV_FILE" ]; then
+  cp "$STACK_DIR/.env.example" "$ENV_FILE"
+  [ -z "$NEW_DOMAIN" ] || sed -i.bak "s|^DOMAIN=.*|DOMAIN=\"$NEW_DOMAIN\"|" "$ENV_FILE" && rm -f "$ENV_FILE.bak"
+  log "created $ENV_FILE from .env.example"
+fi
+if [ ! -w "$ENV_FILE" ]; then
+  # e.g. created with sudo: hand it back to the deploy user (Docker runs as root here, same as a one-time sudo chown)
+  docker run --rm -v "$STACK_DIR:/stack" alpine:3 chown "$(id -u):$(id -g)" /stack/.env
+fi
+grep -q "^DOMAIN=\"\?$PLACEHOLDER_DOMAIN" "$ENV_FILE" \
+  && die "set DOMAIN in $ENV_FILE (still $PLACEHOLDER_DOMAIN), or add a DOMAIN secret/variable before the first deploy"
 for key in DOMAIN VITE_API_URL VITE_MAPBIOMAS_URL VITE_BASEMAP_DARK VITE_BASEMAP_LIGHT VITE_BASEMAP_SATELLITE; do
   grep -Eq "^$key=.+" "$ENV_FILE" || die "$key is missing or empty in $ENV_FILE (see .env.example)"
 done
@@ -52,7 +64,7 @@ cp "$ENV_FILE" "$ENV_ROLLBACK"
 set_tag "$TAG"
 
 log "pull + up (WEB_TAG=$TAG)"
-compose pull web
+compose pull web || { mv "$ENV_ROLLBACK" "$ENV_FILE"; die "could not pull image $TAG"; }
 compose up -d --no-build --remove-orphans
 
 if wait_healthy; then
