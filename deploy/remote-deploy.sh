@@ -29,9 +29,14 @@ if [ ! -w "$ENV_FILE" ]; then
   # e.g. created as root: hand it back to the deploy user (needs passwordless sudo)
   sudo -n chown "$(id -un):$(id -gn)" "$ENV_FILE" || die "$ENV_FILE is not writable by $(id -un): sudo chown $(id -un): $ENV_FILE"
 fi
-grep -q "^DOMAIN=\"\?$PLACEHOLDER_DOMAIN" "$ENV_FILE" \
-  && die "set DOMAIN in $ENV_FILE (still $PLACEHOLDER_DOMAIN), or add a DOMAIN secret/variable before the first deploy"
-for key in DOMAIN VITE_API_URL VITE_MAPBIOMAS_URL VITE_BASEMAP_DARK VITE_BASEMAP_LIGHT VITE_BASEMAP_SATELLITE; do
+caddy_on() { grep -Eq '^COMPOSE_PROFILES=.*caddy' "$ENV_FILE"; }
+# DOMAIN only matters when Caddy serves the site; behind the host's nginx the domains live in the nginx config.
+if caddy_on; then
+  grep -q "^DOMAIN=\"\?$PLACEHOLDER_DOMAIN" "$ENV_FILE" \
+    && die "set DOMAIN in $ENV_FILE (still $PLACEHOLDER_DOMAIN), or add a DOMAIN secret/variable before the first deploy"
+  grep -Eq "^DOMAIN=.+" "$ENV_FILE" || die "DOMAIN is missing or empty in $ENV_FILE"
+fi
+for key in VITE_API_URL VITE_MAPBIOMAS_URL VITE_BASEMAP_DARK VITE_BASEMAP_LIGHT VITE_BASEMAP_SATELLITE; do
   grep -Eq "^$key=.+" "$ENV_FILE" || die "$key is missing or empty in $ENV_FILE (see .env.example)"
 done
 
@@ -65,6 +70,8 @@ set_tag "$TAG"
 
 log "pull + up (WEB_TAG=$TAG)"
 compose pull web || { mv "$ENV_ROLLBACK" "$ENV_FILE"; die "could not pull image $TAG"; }
+# Caddy turned off (or never able to start): remove its container so it doesn't linger
+caddy_on || compose --profile caddy rm -sf caddy >/dev/null 2>&1 || true
 compose up -d --no-build --remove-orphans
 
 if wait_healthy; then

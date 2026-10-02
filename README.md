@@ -74,9 +74,26 @@ public/               favicon and logos
 
 ## Production
 
-`compose.yml` runs the site behind Caddy, which serves `https://$DOMAIN` (a comma-separated list works too, e.g. `DOMAIN="fire.example.com, www.fire.example.com"`) and gets the certificates automatically. The `Dockerfile` builds the site without any config and serves it from an unprivileged nginx on port 8080. Unknown paths fall back to `index.html` (all state is in the URL), `/assets` is cached for a year, and `/healthz` returns `ok`.
+The `Dockerfile` builds the site without any config and serves it from an unprivileged nginx on port 8080. Unknown paths fall back to `index.html` (all state is in the URL), `/assets` is cached for a year, `/config.js` carries the `VITE_*` values from `.env`, and `/healthz` returns `ok`.
 
-Run it locally the same way: `cp .env.example .env`, then `docker compose up -d --build`.
+`compose.yml` publishes the site on `127.0.0.1:$WEB_PORT` (default 3001) only, so the server's own nginx serves the domains, the same way as fire-buminusantara. One-time nginx site, e.g. `/etc/nginx/sites-available/monthly-fire`:
+
+```nginx
+server {
+  listen 80;
+  server_name fire.example.com www.fire.example.com;   # as many domains as you like
+  location / {
+    proxy_pass http://127.0.0.1:3001;
+    proxy_set_header Host $host;
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    proxy_set_header X-Forwarded-Proto $scheme;
+  }
+}
+```
+
+Then `sudo ln -s /etc/nginx/sites-available/monthly-fire /etc/nginx/sites-enabled/ && sudo nginx -t && sudo systemctl reload nginx`, and HTTPS with `sudo certbot --nginx -d fire.example.com -d www.fire.example.com`.
+
+No web server on the box? Set `COMPOSE_PROFILES=caddy` and `DOMAIN="a.com, www.a.com"` in `.env`: Caddy then takes ports 80/443 and gets the certificates itself. Locally: `cp .env.example .env`, then `docker compose up -d --build`.
 
 ### CI/CD
 
@@ -96,4 +113,4 @@ On the server, `deploy/remote-deploy.sh` (from the checkout just reset to `origi
 2. GitHub → Settings → Secrets and variables → Actions → Secrets: `SSH_HOST`, `SSH_USER`, `SSH_KEY` (private key), and `SSH_PASSPHRASE` only if the key has one. Optional:
    - `SSH_KNOWN_HOSTS` pins the server's host key (output of `ssh-keyscan <SSH_HOST>` from a trusted machine, same name/IP as `SSH_HOST`). Without it the deploy trusts the key the server shows when it connects.
    - Variable `DEPLOY_PATH` changes the server folder (default `~/monthly-fire-indonesia`).
-3. Push to `main`. The first deploy clones the repo on the server and stops because `.env` is missing: Not needed by hand anymore: the deploy creates the folder (with `sudo -n`, so the SSH user needs passwordless sudo the first time) and `.env` from `.env.example`; set `DOMAIN` there, or add a `DOMAIN` secret before the first deploy, then re-run. Later changes to `.env` apply on the next deploy or `docker compose up -d`; no rebuild needed.
+3. Push to `main`. The first deploy clones the repo on the server and stops because `.env` is missing: The deploy creates the folder (with `sudo -n` when the parent is root-owned, so the SSH user needs passwordless sudo the first time) and `.env` from `.env.example`. Add the nginx site above. Later changes to `.env` apply on the next deploy or `docker compose up -d`; no rebuild needed.
