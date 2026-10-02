@@ -25,7 +25,9 @@ export function TerritorySearch({ currentName, onPalette }: { currentName: strin
     <div className="header-search">
       <button className="search-box" aria-label={t.search} aria-haspopup="dialog" onClick={onPalette}>
         <Search size={16} color="var(--muted)" />
-        <span className="search-current">{currentName || t.search}</span>
+        <span className="search-current" title={currentName || undefined}>
+          {currentName || t.search}
+        </span>
         <kbd className="kbd hide-mobile">{mac ? '⌘K' : 'Ctrl K'}</kbd>
       </button>
     </div>
