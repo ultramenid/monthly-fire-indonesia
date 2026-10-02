@@ -260,6 +260,15 @@ a {
   color: var(--text-2);
   white-space: nowrap;
 }
+.menu-label {
+  /* non-interactive heading at the top of a menu */
+  padding: 8px 10px 4px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--muted);
+  cursor: default;
+  user-select: none;
+}
 .menu-item:hover {
   background: var(--chip);
 }

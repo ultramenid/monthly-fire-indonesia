@@ -39,15 +39,27 @@ export const useYears = () => useQuery({ queryKey: ['years'], queryFn: () => get
 export const useMonths = (year?: number) =>
   useQuery({ queryKey: ['months', year], queryFn: () => get<number[]>(`/statistics/${year}/months`), enabled: !!year, ...STATIC });
 
+// The API calls the level above provinces "region / Wilayah"; they are island groups, so name them that way.
+const ISLAND = { pt: 'Ilha', id: 'Pulau', en: 'Island' };
 export const useTypeNames = () =>
-  useQuery({ queryKey: ['typeNames'], queryFn: () => get<(Names & { type: string })[]>('/territories/translations'), ...STATIC });
+  useQuery({
+    queryKey: ['typeNames'],
+    queryFn: async () =>
+      (await get<(Names & { type: string })[]>('/territories/translations')).map((x) =>
+        x.type === 'region' ? { ...x, namePt: ISLAND.pt, nameId: ISLAND.id, nameEn: ISLAND.en } : x,
+      ),
+    ...STATIC,
+  });
 export const useLandCoverClasses = () =>
   useQuery({ queryKey: ['lcClasses'], queryFn: () => get<(Names & { id: number; color: string })[]>('/land-covers/translations'), ...STATIC });
 
 export const useGroupings = (type: string, code: number) =>
   useQuery({
     queryKey: ['groupings', type, code],
-    queryFn: () => get<Record<string, { pt: string; id: string; en: string }>>(`/territories/${type}/${code}/groupings`),
+    queryFn: async () => {
+      const g = await get<Record<string, { pt: string; id: string; en: string }>>(`/territories/${type}/${code}/groupings`);
+      return g.region ? { ...g, region: ISLAND } : g;
+    },
     ...STATIC,
   });
 export const useTerritoryLandCovers = (type: string, code: number) =>

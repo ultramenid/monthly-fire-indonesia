@@ -172,8 +172,9 @@ function SeriesCard({ s, codes, pending }: P) {
               {t.monthly}
             </button>
             /
-            <button aria-pressed={mode === 'annual'} onClick={() => setMode('annual')}>
-              {t.annual}
+            {/* labelled with the selected year; screen readers still hear "annual" */}
+            <button aria-pressed={mode === 'annual'} aria-label={t.annual} onClick={() => setMode('annual')}>
+              {s.year ?? t.annual}
             </button>
           </div>
           <EChart option={option} height={big ? 440 : 180} />

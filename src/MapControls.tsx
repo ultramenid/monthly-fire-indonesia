@@ -184,7 +184,7 @@ export function MapControls({ map, s, bbox, drawing }: Props) {
   const groupings = [...new Set([...(below.length ? below : [s.type]), ...thematic, s.grouping])];
   const groupName = (g: string) => name(opts.names[g] as never) || g;
 
-  const lcLabel = s.landCover ? name(landCovers.find((l) => l.id === s.landCover)) : t.allLandCover;
+  const lcLabel = s.landCover ? name(landCovers.find((l) => l.id === s.landCover)) : t.landCoverLabel;
 
   return (
     <>
@@ -192,10 +192,15 @@ export function MapControls({ map, s, bbox, drawing }: Props) {
       <div className="map-top" ref={topRef}>
         <div style={{ position: 'relative' }}>
           <button className="pill" aria-expanded={pop === 'grouping'} disabled={groupings.length < 2} onClick={() => toggle('grouping')}>
-            {t.groupedBy} {groupName(s.grouping)} {groupings.length > 1 && <ChevronDown size={16} />}
+            {/* national default (Pulau) reads as the generic "Region" until another grouping is picked */}
+            {t.by} {s.type === 'country' && s.grouping === defaultGrouping(s.type) ? t.groupingTitle : groupName(s.grouping)}{' '}
+            {groupings.length > 1 && <ChevronDown size={16} />}
           </button>
           {pop === 'grouping' && (
-            <div className="pop menu" style={{ top: 42, left: 0, minWidth: '100%' }} role="menu">
+            <div className="pop menu" style={{ top: 42, left: 0, minWidth: '100%' }} role="menu" aria-label={t.groupingTitle}>
+              <div className="menu-label" aria-hidden="true">
+                {t.groupingTitle}
+              </div>
               {groupings.map((g) => (
                 <button
                   key={g}
@@ -212,11 +217,11 @@ export function MapControls({ map, s, bbox, drawing }: Props) {
         </div>
         <div style={{ position: 'relative' }}>
           <button className={`pill${s.landCover ? ' active' : ''}`} aria-expanded={pop === 'landcover'} onClick={() => toggle('landcover')}>
-            {t.showing} {lcLabel} <ChevronDown size={16} />
+            {lcLabel} <ChevronDown size={16} />
           </button>
           {pop === 'landcover' && (
             <div className="pop menu" style={{ top: 42, left: 0, minWidth: '100%' }} role="menu">
-              {[{ id: undefined, label: t.allLandCover[0].toUpperCase() + t.allLandCover.slice(1) /* lowercase in i18n for the "Showing …" pill */ }, ...landCovers.map((l) => ({ id: l.id, label: name(l) }))].map((o) => (
+              {[{ id: undefined, label: t.landCoverLabel }, ...landCovers.map((l) => ({ id: l.id, label: name(l) }))].map((o) => (
                 <button
                   key={o.id ?? 'all'}
                   className="menu-item"
