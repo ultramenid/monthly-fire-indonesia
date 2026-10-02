@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import * as maplibregl from 'maplibre-gl';
 import 'maplibre-gl/dist/maplibre-gl.css';
 import { useBounds, useFireTiles, useGroupingOptions, useInsideCodes, useRankingFor, shapeTilesUrl } from '../api';
@@ -18,6 +18,8 @@ export function MapView({ state }: { state: AppState }) {
   const [tooltip, setTooltip] = useState<Tooltip | null>(null);
   const currentOverlay = useRef<Overlay>(null);
   const isDrawing = useRef(false);
+  // AreaGif owns when drawing starts/ends; the ref stays here so map handlers read it without re-binding
+  const setDrawing = useCallback((drawing: boolean) => { isDrawing.current = drawing; }, []);
 
   const period = { year: state.year, monthStart: state.monthStart, monthEnd: state.monthEnd, landCover: state.landCover };
   const tileQuery = { ...period, territoryType: state.type, territoryCode: state.code };
@@ -162,7 +164,7 @@ export function MapView({ state }: { state: AppState }) {
           )}
         </div>
       )}
-      {map && <MapControls map={map} state={state} boundsRing={boundsRing} isDrawing={isDrawing} />}
+      {map && <MapControls map={map} state={state} boundsRing={boundsRing} setDrawing={setDrawing} />}
     </div>
   );
 }

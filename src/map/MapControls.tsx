@@ -1,4 +1,4 @@
-import { useEffect, useState, type RefObject } from 'react';
+import { useEffect, useState } from 'react';
 import type * as maplibregl from 'maplibre-gl';
 import { ChevronDown, Crosshair, Droplet, Map as MapIcon, Maximize, Minus, Plus, ScanSearch, SendHorizontal, Share2, TextSearch } from 'lucide-react';
 import { useGroupingOptions, useTerritoryLandCovers } from '../api';
@@ -11,14 +11,14 @@ import { AreaGif } from './AreaGif';
 import { Dropdown, RadioMenu } from './Dropdown';
 import { TimeBar } from './TimeBar';
 
-type Props = { map: maplibregl.Map; state: AppState; boundsRing?: number[][]; isDrawing: RefObject<boolean> };
+type Props = { map: maplibregl.Map; state: AppState; boundsRing?: number[][]; setDrawing: (drawing: boolean) => void };
 
 const pill =
   'inline-flex h-[37px] items-center gap-1.5 rounded-full border border-transparent bg-bg px-3 font-bold whitespace-nowrap text-fg-2 focus-visible:border-border focus-visible:outline-none mobile:max-w-full mobile:overflow-hidden';
 const mapButton = 'icon-btn bg-bg';
 
 /** All floating controls on the map: filters (top), navigation (right), time and coordinates (bottom). */
-export function MapControls({ map, state, boundsRing, isDrawing }: Props) {
+export function MapControls({ map, state, boundsRing, setDrawing }: Props) {
   const { labels, name } = useI18n();
   const [theme] = useTheme();
   const landCovers = useTerritoryLandCovers(state.type, state.code).data ?? [];
@@ -162,7 +162,7 @@ export function MapControls({ map, state, boundsRing, isDrawing }: Props) {
           )}
         </Dropdown>
 
-        <AreaGif map={map} state={state} isDrawing={isDrawing} />
+        <AreaGif map={map} state={state} setDrawing={setDrawing} />
       </div>
 
       <div className="absolute right-4 bottom-[72px] z-10 flex flex-col gap-2">

@@ -1,4 +1,4 @@
-import { useEffect, useState, type RefObject } from 'react';
+import { useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
 import type * as maplibregl from 'maplibre-gl';
 import type { FeatureCollection } from 'geojson';
@@ -21,7 +21,7 @@ const boxBetween = (corner: maplibregl.LngLat, oppositeCorner: maplibregl.LngLat
 ];
 
 /** Drag a box on the map and Earth Engine renders the fire evolution inside it as a GIF. */
-export function AreaGif({ map, state, isDrawing }: { map: maplibregl.Map; state: AppState; isDrawing: RefObject<boolean> }) {
+export function AreaGif({ map, state, setDrawing }: { map: maplibregl.Map; state: AppState; setDrawing: (drawing: boolean) => void }) {
   const { labels } = useI18n();
   const [theme] = useTheme();
   const [isDrawMode, setDrawMode] = useState(false);
@@ -29,7 +29,7 @@ export function AreaGif({ map, state, isDrawing }: { map: maplibregl.Map; state:
 
   useEffect(() => {
     if (!isDrawMode) return;
-    isDrawing.current = true;
+    setDrawing(true);
     map.dragPan.disable();
     map.getCanvas().style.cursor = '';
     map.getContainer().classList.add('maplibregl-crosshair');
@@ -91,7 +91,7 @@ export function AreaGif({ map, state, isDrawing }: { map: maplibregl.Map; state:
       map.dragPan.enable();
       map.getContainer().classList.remove('maplibregl-crosshair');
       // let the click that ends the drag pass before territory clicks work again
-      setTimeout(() => (isDrawing.current = false), 50);
+      setTimeout(() => setDrawing(false), 50);
     };
   }, [isDrawMode]); // eslint-disable-line react-hooks/exhaustive-deps
 
