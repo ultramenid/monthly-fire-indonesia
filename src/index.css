@@ -445,8 +445,8 @@ a {
 }
 .range .track {
   position: absolute;
-  left: 0;
-  right: 0;
+  left: 12px;
+  right: 12px;
   top: 13px;
   height: 4px;
   border-radius: 4px;
@@ -481,6 +481,7 @@ a {
 .range input::-webkit-slider-thumb {
   -webkit-appearance: none;
   pointer-events: auto;
+  box-sizing: border-box;
   width: 24px;
   height: 24px;
   border-radius: 50%;
@@ -490,8 +491,9 @@ a {
 }
 .range input::-moz-range-thumb {
   pointer-events: auto;
-  width: 22px;
-  height: 22px;
+  box-sizing: border-box;
+  width: 24px;
+  height: 24px;
   border-radius: 50%;
   background: var(--bg);
   border: 1px solid var(--accent-text);
@@ -499,6 +501,12 @@ a {
 }
 .range input::-webkit-slider-runnable-track {
   background: none;
+}
+.range input:active::-webkit-slider-thumb {
+  cursor: grabbing;
+}
+.range input:active::-moz-range-thumb {
+  cursor: grabbing;
 }
 .year-pop {
   bottom: 48px;

@@ -1,4 +1,4 @@
-import { useEffect, useState, type RefObject } from 'react';
+import { useEffect, useRef, useState, type RefObject } from 'react';
 import type * as maplibregl from 'maplibre-gl';
 import type { FeatureCollection } from 'geojson';
 import {
@@ -139,9 +139,35 @@ export function MapControls({ map, s, bbox, drawing }: Props) {
   }, [drawMode]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ---- months slider ----
-  const iStart = Math.max(0, months.indexOf(s.monthStart ?? -1));
-  const iEnd = Math.max(0, months.indexOf(s.monthEnd ?? -1));
-  const pct = (i: number) => (months.length > 1 ? (i / (months.length - 1)) * 100 : 0);
+  // drag locally, commit on release: every committed change refetches stats + Earth Engine tiles
+  const [draft, setDraft] = useState<[number, number] | null>(null);
+  const [iStart, iEnd] = draft ?? [Math.max(0, months.indexOf(s.monthStart ?? -1)), Math.max(0, months.indexOf(s.monthEnd ?? -1))];
+  // which thumb this drag moves; decided by direction when both thumbs sit on the same month
+  const role = useRef<'start' | 'end' | null>(null);
+  const move = (which: 'start' | 'end', v: number) => {
+    if (!role.current) {
+      if (iStart !== iEnd) role.current = which;
+      else if (v === iStart) return;
+      else role.current = v < iStart ? 'start' : 'end';
+    }
+    setDraft(role.current === 'start' ? [Math.min(v, iEnd), iEnd] : [iStart, Math.max(v, iStart)]);
+  };
+  const commit = () => {
+    role.current = null;
+    if (!draft) return;
+    setDraft(null);
+    if (months[draft[0]] !== s.monthStart || months[draft[1]] !== s.monthEnd) setState({ monthStart: months[draft[0]], monthEnd: months[draft[1]] });
+  };
+  const frac = (i: number) => (months.length > 1 ? i / (months.length - 1) : 0);
+  // a native thumb's center travels [12px, width - 12px], so place fill/ticks on that span
+  const at = (i: number) => `calc(12px + (100% - 24px) * ${frac(i)})`;
+  // release anywhere ends the drag (the pointer often leaves the slider before letting go)
+  useEffect(() => {
+    if (!draft) return;
+    addEventListener('pointerup', commit);
+    return () => removeEventListener('pointerup', commit);
+  });
+  const slider = { min: 0, max: months.length - 1, onKeyUp: commit, onBlur: commit };
 
   const [coordText, setCoordText] = useState('');
   const flyTo = (lat: number, lng: number) =>
@@ -313,32 +339,30 @@ export function MapControls({ map, s, bbox, drawing }: Props) {
           <span className="vsep" />
           <span className="months-label">
             <CalendarDays size={20} />
-            {s.monthStart && month(s.monthStart)}
-            {s.monthEnd !== s.monthStart && s.monthEnd && <> &nbsp;{month(s.monthEnd)}</>}
+            {months.length > 0 && month(months[iStart])}
+            {iEnd !== iStart && <> – {month(months[iEnd])}</>}
           </span>
           <div className="range">
             <div className="track" />
-            <div className="fill" style={{ left: `${pct(iStart)}%`, width: `${pct(iEnd) - pct(iStart)}%` }} />
+            <div className="fill" style={{ left: at(iStart), width: `calc((100% - 24px) * ${frac(iEnd) - frac(iStart)})` }} />
             {months.map((m, i) => (
-              <div key={m} className="tick" style={{ left: `${pct(i)}%` }} />
+              <div key={m} className="tick" style={{ left: at(i) }} />
             ))}
             {months.length > 0 && (
               <>
                 <input
                   type="range"
                   aria-label="Start month"
-                  min={0}
-                  max={months.length - 1}
+                  {...slider}
                   value={iStart}
-                  onChange={(e) => setState({ monthStart: months[Math.min(+e.target.value, iEnd)] })}
+                  onChange={(e) => move('start', +e.target.value)}
                 />
                 <input
                   type="range"
                   aria-label="End month"
-                  min={0}
-                  max={months.length - 1}
+                  {...slider}
                   value={iEnd}
-                  onChange={(e) => setState({ monthEnd: months[Math.max(+e.target.value, iStart)] })}
+                  onChange={(e) => move('end', +e.target.value)}
                 />
               </>
             )}
