@@ -85,7 +85,7 @@ sudo ln -s /etc/nginx/sites-available/monthly-fire /etc/nginx/sites-enabled/
 sudo nginx -t && sudo systemctl reload nginx
 # Cert via the same webroot as fire-buminusantara, then restore the 443 block and reload again.
 # One cert covers both names (SAN): the -d order names the cert after the first domain.
-sudo certbot certonly --webroot -w /var/www/html -d kobong.nusantara.earth -d platform.fire.monthly.mapbiomas.id
+sudo certbot certonly --webroot -w /var/www/html -d kobong.nusantara.earth -d kobong.mapbiomas.id -d platform.fire.monthly.mapbiomas.id
 ```
 
 Renewals run from certbot's own timer; the 80 block serves the challenge.
