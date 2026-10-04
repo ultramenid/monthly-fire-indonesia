@@ -30,7 +30,7 @@ export default function App() {
 
   return (
     <div className="grid h-full grid-rows-[44px_auto_1fr] overflow-hidden mobile:h-auto mobile:min-h-full mobile:grid-cols-[minmax(0,1fr)] mobile:grid-rows-[44px_auto_auto] mobile:overflow-auto">
-      <Header currentName={territoryName} />
+      <Header />
       <Breadcrumb type={state.type} code={state.code} name={territoryName} parentLabel={territory?.parentLabel} />
       <main className="grid min-h-0 grid-cols-[1fr_400px] mobile:grid-cols-1">
         <MapView state={state} />

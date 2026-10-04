@@ -28,8 +28,8 @@ function Logo() {
   );
 }
 
-/** Shows the current territory; clicking it opens the Cmd+K search palette. */
-function TerritorySearch({ currentName, onOpen }: { currentName: string; onOpen: () => void }) {
+/** Search trigger; clicking it opens the Cmd+K search palette. */
+function TerritorySearch({ onOpen }: { onOpen: () => void }) {
   const { labels } = useI18n();
   const isMac = /Mac|iPhone|iPad/.test(navigator.platform);
   return (
@@ -41,9 +41,7 @@ function TerritorySearch({ currentName, onOpen }: { currentName: string; onOpen:
         onClick={onOpen}
       >
         <Search size={16} className="text-muted" />
-        <span className="min-w-0 flex-1 truncate" title={currentName || undefined}>
-          {currentName || labels.search}
-        </span>
+        <span className="min-w-0 flex-1 truncate text-muted">{labels.paletteHint}</span>
         <kbd className="rounded border px-1.5 py-px font-sans text-[11px] leading-4 font-semibold whitespace-nowrap text-muted mobile:hidden">
           {isMac ? '⌘K' : 'Ctrl K'}
         </kbd>
@@ -52,7 +50,7 @@ function TerritorySearch({ currentName, onOpen }: { currentName: string; onOpen:
   );
 }
 
-export function Header({ currentName }: { currentName: string }) {
+export function Header() {
   const { labels, lang, setLang } = useI18n();
   const [theme, setTheme] = useTheme();
   const [isLangMenuOpen, setLangMenuOpen] = useState(false);
@@ -74,7 +72,7 @@ export function Header({ currentName }: { currentName: string }) {
   return (
     <header className="relative z-20 flex items-center gap-4 bg-surface px-4 mobile:gap-1 mobile:px-2">
       <Logo />
-      <TerritorySearch currentName={currentName} onOpen={() => setPaletteOpen(true)} />
+      <TerritorySearch onOpen={() => setPaletteOpen(true)} />
       {isPaletteOpen && <Palette onClose={() => setPaletteOpen(false)} />}
       <a className={`${navButton} mobile:hidden`} href={API_DOCS_URL} target="_blank" rel="noreferrer">
         <Code2 size={16} /> {labels.api}
