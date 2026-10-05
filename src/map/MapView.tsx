@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import * as maplibregl from 'maplibre-gl';
 import 'maplibre-gl/dist/maplibre-gl.css';
-import { useBounds, useFireTiles, useGroupingOptions, useInsideCodes, useRankingFor, shapeTilesUrl } from '../api';
+import { useBounds, useFireTiles, useRanking, shapeTilesUrl } from '../api';
 import { bboxOf } from '../lib/geo';
 import { ADMIN_TYPES, selectTerritory, type AppState } from '../state';
 import { useTheme, useTokens } from '../hooks';
@@ -25,9 +25,7 @@ export function MapView({ state }: { state: AppState }) {
   const tileQuery = { ...period, territoryType: state.type, territoryCode: state.code };
   const fireTiles = useFireTiles('raster', tileQuery);
   const heatTiles = useFireTiles('heatmap', tileQuery);
-  const isDerivedLayer = useGroupingOptions(state.type, state.code, period).uncoded.includes(state.grouping);
-  const ranking = useRankingFor(state, period, isDerivedLayer);
-  const insideCodes = useInsideCodes(state.type, state.code, state.grouping, isDerivedLayer);
+  const ranking = useRanking(state, period);
   const bounds = useBounds(state.type, state.code);
   const styleKey = state.basemap === 'satellite' ? 'satellite' : theme;
   const lastStyleKey = useRef(styleKey);
@@ -114,21 +112,24 @@ export function MapView({ state }: { state: AppState }) {
     }
     const isNational = state.type === 'country';
     const isAdminGrouping = ADMIN_TYPES.has(state.grouping);
+    // Thematic layer inside a territory: its mask (gfocus) covers the whole country. overlay.ts tucks it under the basemap
+    // so the surroundings look like an admin grouping; satellite has no land fill to hide it under, so darken outside there.
+    const clipGroup = !isNational && state.grouping !== state.type && !isAdminGrouping;
     currentOverlay.current = {
       fireUrl: fireTiles.data?.url,
       heatUrl: heatTiles.data?.url,
       grouping: state.grouping,
       // below country the mask only depends on the territory, so keep the URL stable to avoid reloading it
       focusUrl: shapeTilesUrl(state.type, state.code, isNational ? state.grouping : state.type),
-      filter: isDerivedLayer ? ['in', ['get', 'code'], ['literal', [...(insideCodes ?? [])]]] : selectionFilter(state),
+      filter: selectionFilter(state),
       opacity: state.opacity,
       paintValues,
       theme,
       paintColor: tokens.chart,
       focusColor: tokens.text,
       national: isNational && isAdminGrouping,
-      dimOutside: isDerivedLayer || (isNational && !isAdminGrouping),
-      clipGroup: !isNational && state.grouping !== state.type && !isAdminGrouping,
+      dimOutside: (clipGroup && state.basemap === 'satellite') || (isNational && !isAdminGrouping),
+      clipGroup,
     };
     // While a new style is loading this throws; the 'style.load' handler above applies it afterwards.
     try {
@@ -136,7 +137,7 @@ export function MapView({ state }: { state: AppState }) {
     } catch {
       // style still loading
     }
-  }, [map, fireTiles.data?.url, heatTiles.data?.url, state.grouping, state.type, state.code, state.opacity, state.paint, rankingRows, theme, isDerivedLayer, insideCodes]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [map, fireTiles.data?.url, heatTiles.data?.url, state.grouping, state.type, state.code, state.opacity, state.paint, state.basemap, rankingRows, theme]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Fly to the selected territory.
   const boundsRing = bounds.data?.geometry.coordinates[0];

@@ -207,9 +207,25 @@ export function applyOverlay(map: maplibregl.Map, overlay: Overlay) {
   map.setFilter('grp-fill', overlay.filter);
   map.setFilter('grp-line', overlay.filter);
 
-  // Layer order: the plain tint sits under the fire layers; darkening and outlines sit on top.
-  map.moveLayer('focus', overlay.dimOutside ? beforeLabels : ['heat', 'fire', 'grp-fill'].find((id) => map.getLayer(id)));
-  map.moveLayer('gfocus', beforeLabels);
+  // Layer order.
+  const fireLayers = ['heat', 'fire'].filter((id) => map.getLayer(id));
+  // Thematic layer inside a territory: the layer mask (gfocus) covers the whole country. Placed with the fire right above
+  // the basemap's land fills (under water, roads, borders), it is land colour on land colour, so it only shows where it
+  // darkens fire — and fire is clipped to the territory. Outside, the map looks the same as for an admin grouping.
+  const ownLayers = new Set([...fireLayers, 'gfocus', 'focus']);
+  const aboveLand =
+    overlay.clipGroup && !isSatellite
+      ? map.getStyle().layers.find((layer) => !ownLayers.has(layer.id) && !/^(background|landcover|landuse|park)/.test(layer.id))?.id
+      : undefined;
+  if (aboveLand) {
+    // the plain tint goes over the mask, otherwise the mask would hide it outside the layer's shapes
+    for (const id of ownLayers) map.moveLayer(id, aboveLand);
+  } else {
+    // the plain tint sits under the fire layers; darkening and outlines sit on top
+    for (const id of fireLayers) map.moveLayer(id, 'grp-fill');
+    map.moveLayer('focus', overlay.dimOutside ? beforeLabels : [...fireLayers, 'grp-fill'][0]);
+    map.moveLayer('gfocus', beforeLabels);
+  }
   map.moveLayer('focus-line', beforeLabels);
 
   map.removeFeatureState({ source: 'grp', sourceLayer: SOURCE_LAYER });

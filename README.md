@@ -55,8 +55,7 @@ src/
     client.ts         fetch helper, cache settings, tile URLs
     territory.ts      years, territories, search, bounds
     stats.ts          area, time series, land cover, ranking, fire tiles, GIF
-    thematic.ts       which thematic layers have data in a territory
-    inside.ts + inside.worker.ts   finds a layer's features inside a territory (in a Web Worker)
+    thematic.ts       which thematic layers the API has data for in a territory
   map/
     MapView.tsx       the MapLibre map, hover and click
     overlay.ts        map layers: fire, heatmap, outline, sub-territories

@@ -7,10 +7,10 @@ import { Card, Legend } from './Card';
 import { periodOf, retryHandler, type CardDataProps } from './cardData';
 
 /** Total burned area as a ring with the number in the middle. */
-export function AreaCard({ state, featureCodes, isWaiting, retryFeatureCodes }: CardDataProps) {
+export function AreaCard({ state }: CardDataProps) {
   const { labels, formatHa } = useI18n();
   const tokens = useTokens();
-  const query = useArea(state, periodOf(state), featureCodes);
+  const query = useArea(state, periodOf(state));
   const burnedHa = query.data?.areaHa ?? 0;
 
   const chartOption = useMemo(
@@ -45,9 +45,9 @@ export function AreaCard({ state, featureCodes, isWaiting, retryFeatureCodes }: 
     <Card
       title={labels.burnedArea}
       description={labels.burnedAreaDesc}
-      isLoading={query.isLoading || !!isWaiting}
+      isLoading={query.isLoading}
       isRefreshing={query.isFetching}
-      onRetry={retryHandler(query, retryFeatureCodes)}
+      onRetry={retryHandler(query)}
       csvRows={() => [['areaHa'], [burnedHa]]}
     >
       {(isExpanded) => (

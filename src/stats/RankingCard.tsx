@@ -1,6 +1,6 @@
 import { Fragment, useState } from 'react';
 import { ChevronLeft, ChevronRight, PaintBucket } from 'lucide-react';
-import { useRankingFor } from '../api';
+import { useRanking } from '../api';
 import { useI18n } from '../i18n';
 import { selectTerritory, setState, type AppState } from '../state';
 import { Card } from './Card';
@@ -12,10 +12,10 @@ const pageButton =
   'grid h-7 min-w-7 place-items-center rounded border-2 border-transparent bg-surface text-xs font-bold text-muted disabled:opacity-40 aria-[current=true]:border-selected-border aria-[current=true]:bg-selected-bg aria-[current=true]:text-selected-fg';
 
 /** Sub-territories ranked by burned area, 10 per page. Clicking one opens it. */
-export function RankingCard({ state, isDerived }: { state: AppState; isDerived: boolean }) {
+export function RankingCard({ state }: { state: AppState }) {
   const { labels, formatHa } = useI18n();
   const [page, setPage] = useState(1);
-  const query = useRankingFor(state, periodOf(state), isDerived);
+  const query = useRanking(state, periodOf(state));
   const rows = query.data ?? [];
 
   const pageCount = Math.max(1, Math.ceil(rows.length / ROWS_PER_PAGE));

@@ -54,9 +54,14 @@ export function MapControls({ map, state, boundsRing, setDrawing }: Props) {
   const adminLevelsBelow: string[] = [];
   for (let level = state.type; defaultGrouping(level) !== level; level = defaultGrouping(level)) adminLevelsBelow.push(defaultGrouping(level));
   const layerOrder = Object.keys(groupingOptions.names);
-  const thematicLayers = [...groupingOptions.backed, ...groupingOptions.derived].sort((first, second) => layerOrder.indexOf(first) - layerOrder.indexOf(second));
+  const thematicLayers = groupingOptions.backed.toSorted((first, second) => layerOrder.indexOf(first) - layerOrder.indexOf(second));
   // a thematic territory (e.g. a national park) has no admin levels below it, so it groups by itself
-  const groupings = [...new Set([...(adminLevelsBelow.length ? adminLevelsBelow : [state.type]), ...thematicLayers, state.grouping])];
+  const groupings = [...new Set([...(adminLevelsBelow.length ? adminLevelsBelow : [state.type]), ...thematicLayers])];
+  // the active grouping has no API numbers here (other period, old link…): go back to the default
+  const isGroupingUnavailable = groupingOptions.isSettled && !groupings.includes(state.grouping);
+  useEffect(() => {
+    if (isGroupingUnavailable) setState({ grouping: defaultGrouping(state.type) });
+  }, [isGroupingUnavailable, state.type]);
   const groupingName = (grouping: string) => name(groupingOptions.names[grouping] as never) || grouping;
   // at country level the default grouping (islands) shows the generic "Region" label
   const isDefaultNationalGrouping = state.type === 'country' && state.grouping === defaultGrouping(state.type);

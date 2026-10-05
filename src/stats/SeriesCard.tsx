@@ -7,13 +7,13 @@ import { Card, Legend } from './Card';
 import { periodOf, retryHandler, type CardDataProps } from './cardData';
 
 /** Burned area per month (or per year) as a bar chart. */
-export function SeriesCard({ state, featureCodes, isWaiting, retryFeatureCodes }: CardDataProps) {
+export function SeriesCard({ state }: CardDataProps) {
   const { labels, formatHa, numberFormat, monthName } = useI18n();
   const tokens = useTokens();
   const [mode, setMode] = useState<'monthly' | 'annual'>('monthly');
-  const query = useTimeSeries(state, periodOf(state), featureCodes);
+  const query = useTimeSeries(state, periodOf(state));
   const series = query.data;
-  const isLoading = query.isLoading || !!isWaiting;
+  const isLoading = query.isLoading;
 
   const bars = useMemo(() => {
     if (!series) return [];
@@ -62,7 +62,7 @@ export function SeriesCard({ state, featureCodes, isWaiting, retryFeatureCodes }
       description={labels.burnedSeriesDesc}
       isLoading={isLoading}
       isRefreshing={query.isFetching}
-      onRetry={retryHandler(query, retryFeatureCodes)}
+      onRetry={retryHandler(query)}
       isEmpty={!isLoading && !bars.length}
       csvRows={() => [['period', 'areaHa'], ...bars.map((bar) => [bar.label, bar.value])]}
     >

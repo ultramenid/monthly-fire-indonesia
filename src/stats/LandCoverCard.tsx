@@ -9,12 +9,12 @@ import { periodOf, retryHandler, type CardDataProps } from './cardData';
 const LEVELS = [1, 2, 3, 4];
 
 /** Burned area split by land cover class, at the chosen detail level. */
-export function LandCoverCard({ state, featureCodes, isWaiting, retryFeatureCodes }: CardDataProps) {
+export function LandCoverCard({ state }: CardDataProps) {
   const { labels, formatHa, name } = useI18n();
   const tokens = useTokens();
   const [level, setLevel] = useState(1);
-  const query = useLandCoverStats(state, periodOf(state), level, featureCodes);
-  const isLoading = query.isLoading || !!isWaiting;
+  const query = useLandCoverStats(state, periodOf(state), level);
+  const isLoading = query.isLoading;
   const classes = useLandCoverClasses().data;
   const rows = useMemo(() => (query.data ?? []).filter((row) => row.areaHa > 0), [query.data]);
 
@@ -51,7 +51,7 @@ export function LandCoverCard({ state, featureCodes, isWaiting, retryFeatureCode
       description={labels.lcDesc}
       isLoading={isLoading}
       isRefreshing={query.isFetching}
-      onRetry={retryHandler(query, retryFeatureCodes)}
+      onRetry={retryHandler(query)}
       isEmpty={!isLoading && !rows.length}
       csvRows={() => [['id', 'class', 'areaHa'], ...rows.map((row) => [row.id, name(row), row.areaHa])]}
     >
