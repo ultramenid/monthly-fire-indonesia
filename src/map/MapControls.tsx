@@ -16,6 +16,9 @@ type Props = { map: maplibregl.Map; state: AppState; boundsRing?: number[][]; se
 const pill =
   'inline-flex h-[37px] items-center gap-1.5 rounded-full border border-transparent bg-bg px-3 font-bold whitespace-nowrap text-fg-2 focus-visible:border-border focus-visible:outline-none mobile:max-w-full mobile:overflow-hidden';
 const mapButton = 'icon-btn bg-bg';
+// The API sends no palette, so these are sampled from its heatmap tiles: fade-in pink, then red, then dark red, at most 50% alpha.
+// shortcut: hardcoded colours go stale if the API changes its palette; re-sample the tiles if the map stops matching.
+const HEAT_GRADIENT = 'linear-gradient(to right, #ff7b7b00, #ff7b7b80, #ff000080, #a7000080)';
 
 /** All floating controls on the map: filters (top), navigation (right), time and coordinates (bottom). */
 export function MapControls({ map, state, boundsRing, setDrawing }: Props) {
@@ -25,11 +28,13 @@ export function MapControls({ map, state, boundsRing, setDrawing }: Props) {
 
   const [bearing, setBearing] = useState(0);
   const [center, setCenter] = useState(() => map.getCenter());
+  const [zoom, setZoom] = useState(() => map.getZoom());
   const [showCenterMarker, setShowCenterMarker] = useState(false);
   useEffect(() => {
     const onMove = () => {
       setCenter(map.getCenter());
       setBearing(map.getBearing());
+      setZoom(map.getZoom());
     };
     map.on('move', onMove);
     return () => {
@@ -231,6 +236,18 @@ export function MapControls({ map, state, boundsRing, setDrawing }: Props) {
       {showCenterMarker && (
         <div className="pointer-events-none absolute top-1/2 left-1/2 z-5 -translate-1/2 text-fg">
           <Plus size={18} />
+        </div>
+      )}
+
+      {/* overlay.ts has faded the heatmap out by zoom 9; burn-scar pixels show from there */}
+      {zoom < 9 && (
+        <div className="absolute bottom-[72px] left-4 z-10 w-44 rounded-lg bg-bg px-3 py-2 text-xs text-fg-2">
+          <div className="font-bold">{labels.heatLegend}</div>
+          <div className="my-1.5 h-2 rounded-full border" style={{ background: HEAT_GRADIENT }} />
+          <div className="flex justify-between text-muted">
+            <span>{labels.low}</span>
+            <span>{labels.high}</span>
+          </div>
         </div>
       )}
 
