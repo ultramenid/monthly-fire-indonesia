@@ -1,10 +1,10 @@
 import { useMemo } from 'react';
-import { useArea } from '../api';
+import { periodOf, useArea } from '../api';
 import { useI18n } from '../i18n';
 import { useTokens } from '../hooks';
 import { EChart } from '../ui';
 import { Card, Legend } from './Card';
-import { periodOf, retryHandler, type CardDataProps } from './cardData';
+import { retryHandler, type CardDataProps } from './cardData';
 
 /** Total burned area as a ring with the number in the middle. */
 export function AreaCard({ state }: CardDataProps) {

@@ -1,10 +1,10 @@
 import { useMemo, useState } from 'react';
-import { useLandCoverClasses, useLandCoverStats } from '../api';
+import { periodOf, useLandCoverClasses, useLandCoverStats } from '../api';
 import { useI18n } from '../i18n';
 import { useTokens } from '../hooks';
 import { EChart } from '../ui';
 import { Card } from './Card';
-import { periodOf, retryHandler, type CardDataProps } from './cardData';
+import { retryHandler, type CardDataProps } from './cardData';
 
 const LEVELS = [1, 2, 3, 4];
 

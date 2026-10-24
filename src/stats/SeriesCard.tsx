@@ -1,10 +1,10 @@
 import { useMemo, useState } from 'react';
-import { useTimeSeries } from '../api';
+import { periodOf, useTimeSeries } from '../api';
 import { useI18n } from '../i18n';
 import { useTokens } from '../hooks';
 import { EChart } from '../ui';
 import { Card, Legend } from './Card';
-import { periodOf, retryHandler, type CardDataProps } from './cardData';
+import { retryHandler, type CardDataProps } from './cardData';
 
 /** Burned area per month (or per year) as a bar chart. */
 export function SeriesCard({ state }: CardDataProps) {

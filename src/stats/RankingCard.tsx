@@ -1,10 +1,10 @@
 import { Fragment, useState } from 'react';
 import { ChevronLeft, ChevronRight, PaintBucket } from 'lucide-react';
-import { useRanking } from '../api';
+import { periodOf, useRanking } from '../api';
 import { useI18n } from '../i18n';
 import { selectTerritory, setState, type AppState } from '../state';
 import { Card } from './Card';
-import { periodOf, retryHandler } from './cardData';
+import { retryHandler } from './cardData';
 
 const ROWS_PER_PAGE = 10;
 

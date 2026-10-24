@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import type * as maplibregl from 'maplibre-gl';
 import { ChevronDown, Crosshair, Droplet, Map as MapIcon, Maximize, Minus, Plus, ScanSearch, SendHorizontal, Share2, TextSearch } from 'lucide-react';
-import { useGroupingOptions, useTerritoryLandCovers } from '../api';
+import { periodOf, useGroupingOptions, useTerritoryLandCovers } from '../api';
 import { useI18n } from '../i18n';
 import { bboxOf } from '../lib/geo';
 import { defaultGrouping, setState, type AppState } from '../state';
@@ -49,7 +49,7 @@ export function MapControls({ map, state, boundsRing, setDrawing }: Props) {
   };
 
   // Grouping options: every admin level below the territory, then the thematic layers with data here.
-  const period = { year: state.year, monthStart: state.monthStart, monthEnd: state.monthEnd, landCover: state.landCover };
+  const period = periodOf(state);
   const groupingOptions = useGroupingOptions(state.type, state.code, period);
   const adminLevelsBelow: string[] = [];
   for (let level = state.type; defaultGrouping(level) !== level; level = defaultGrouping(level)) adminLevelsBelow.push(defaultGrouping(level));

@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import * as maplibregl from 'maplibre-gl';
 import 'maplibre-gl/dist/maplibre-gl.css';
-import { useBounds, useFireTiles, useRanking, shapeTilesUrl } from '../api';
+import { useBounds, useFireTiles, useRanking, periodOf, shapeTilesUrl } from '../api';
 import { bboxOf } from '../lib/geo';
 import { ADMIN_TYPES, selectTerritory, type AppState } from '../state';
 import { useTheme, useTokens } from '../hooks';
@@ -21,7 +21,7 @@ export function MapView({ state }: { state: AppState }) {
   // AreaGif owns when drawing starts/ends; the ref stays here so map handlers read it without re-binding
   const setDrawing = useCallback((drawing: boolean) => { isDrawing.current = drawing; }, []);
 
-  const period = { year: state.year, monthStart: state.monthStart, monthEnd: state.monthEnd, landCover: state.landCover };
+  const period = periodOf(state);
   const tileQuery = { ...period, territoryType: state.type, territoryCode: state.code };
   const fireTiles = useFireTiles('raster', tileQuery);
   const heatTiles = useFireTiles('heatmap', tileQuery);
