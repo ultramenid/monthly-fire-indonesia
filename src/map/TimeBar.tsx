@@ -83,8 +83,18 @@ export function TimeBar({ state }: { state: AppState }) {
       <span className="h-6 w-px bg-border" />
       <span className="inline-flex items-center gap-2 pr-2 pl-4 font-bold whitespace-nowrap">
         <CalendarDays size={20} />
-        {months.length > 0 && monthName(months[startIndex])}
-        {endIndex !== startIndex && <> – {monthName(months[endIndex])}</>}
+        {/* Invisible copies of the widest labels keep the width fixed, so the slider doesn't shift under the pointer as "Jan – Feb" becomes "Jan". */}
+        <span className="grid *:col-start-1 *:row-start-1">
+          {months.map((month) => (
+            <span key={month} className="invisible" aria-hidden>
+              {monthName(month)} – {monthName(month)}
+            </span>
+          ))}
+          <span>
+            {months.length > 0 && monthName(months[startIndex])}
+            {endIndex !== startIndex && <> – {monthName(months[endIndex])}</>}
+          </span>
+        </span>
       </span>
       <div className="month-range relative mr-5 ml-3 h-[30px] w-[520px] max-[1180px]:w-[300px] mobile:w-[calc(100vw-260px)] mobile:min-w-[120px]">
         <div className="absolute inset-x-3 top-[13px] h-1 rounded bg-chip" />
